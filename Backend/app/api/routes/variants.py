@@ -1,0 +1,190 @@
+"""
+Product Variant API endpoints.
+"""
+from typing import Annotated
+
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.core.database import get_db
+from app.models import ZohoSyncStatus
+from app.repositories import ProductIdentityRepository, ProductVariantRepository
+from app.schemas import (
+    PaginatedResponse,
+    ProductVariantCreate,
+    ProductVariantResponse,
+    ProductVariantUpdate,
+    ProductVariantWithListings,
+)
+
+router = APIRouter(prefix="/variants", tags=["Product Variants"])
+
+
+@router.get("", response_model=PaginatedResponse)
+async def list_variants(
+    skip: Annotated[int, Query(ge=0)] = 0,
+    limit: Annotated[int, Query(ge=1, le=1000)] = 100,
+    identity_id: Annotated[int | None, Query(description="Filter by identity")] = None,
+    is_active: Annotated[bool | None, Query(description="Filter by active status")] = None,
+    zoho_sync_status: Annotated[ZohoSyncStatus | None, Query(description="Filter by Zoho sync status")] = None,
+    db: AsyncSession = Depends(get_db),
+):
+    """List product variants with optional filtering."""
+    repo = ProductVariantRepository(db)
+    
+    filters = {}
+    if identity_id is not None:
+        filters["identity_id"] = identity_id
+    if is_active is not None:
+        filters["is_active"] = is_active
+    if zoho_sync_status is not None:
+        filters["zoho_sync_status"] = zoho_sync_status
+    
+    items = await repo.get_multi(skip=skip, limit=limit, filters=filters, order_by="id")
+    total = await repo.count(filters=filters)
+    
+    return PaginatedResponse(
+        total=total,
+        skip=skip,
+        limit=limit,
+        items=[ProductVariantResponse.model_validate(item) for item in items]
+    )
+
+
+@router.post("", response_model=ProductVariantResponse, status_code=status.HTTP_201_CREATED)
+async def create_variant(
+    data: ProductVariantCreate,
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Create a new product variant.
+    
+    The full SKU is auto-generated from identity UPIS-H, color code, and condition.
+    """
+    variant_repo = ProductVariantRepository(db)
+    identity_repo = ProductIdentityRepository(db)
+    
+    # Verify identity exists
+    identity = await identity_repo.get(data.identity_id)
+    if not identity:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Product identity {data.identity_id} not found"
+        )
+    
+    # Check for duplicate variant
+    existing_variants = await variant_repo.get_by_identity(data.identity_id, include_inactive=True)
+    for v in existing_variants:
+        if v.color_code == data.color_code and v.condition_code == data.condition_code:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=f"Variant with color '{data.color_code}' and condition '{data.condition_code}' already exists for this identity"
+            )
+    
+    variant = await variant_repo.create_variant(data.model_dump(), identity)
+    return ProductVariantResponse.model_validate(variant)
+
+
+@router.get("/{variant_id}", response_model=ProductVariantWithListings)
+async def get_variant(
+    variant_id: int,
+    db: AsyncSession = Depends(get_db),
+):
+    """Get a product variant by ID with its platform listings."""
+    repo = ProductVariantRepository(db)
+    variant = await repo.get_with_listings(variant_id)
+    
+    if not variant:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Product variant {variant_id} not found"
+        )
+    
+    return ProductVariantWithListings.model_validate(variant)
+
+
+@router.get("/sku/{full_sku}", response_model=ProductVariantResponse)
+async def get_variant_by_sku(
+    full_sku: str,
+    db: AsyncSession = Depends(get_db),
+):
+    """Get a product variant by full SKU."""
+    repo = ProductVariantRepository(db)
+    variant = await repo.get_by_sku(full_sku.upper())
+    
+    if not variant:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Product variant '{full_sku}' not found"
+        )
+    
+    return ProductVariantResponse.model_validate(variant)
+
+
+@router.patch("/{variant_id}", response_model=ProductVariantResponse)
+async def update_variant(
+    variant_id: int,
+    data: ProductVariantUpdate,
+    db: AsyncSession = Depends(get_db),
+):
+    """Update a product variant."""
+    repo = ProductVariantRepository(db)
+    variant = await repo.get(variant_id)
+    
+    if not variant:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Product variant {variant_id} not found"
+        )
+    
+    update_data = data.model_dump(exclude_unset=True)
+    if update_data:
+        variant = await repo.update(variant, update_data)
+    
+    return ProductVariantResponse.model_validate(variant)
+
+
+@router.delete("/{variant_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_variant(
+    variant_id: int,
+    db: AsyncSession = Depends(get_db),
+):
+    """Delete a product variant and all related data."""
+    repo = ProductVariantRepository(db)
+    
+    deleted = await repo.delete(variant_id)
+    if not deleted:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Product variant {variant_id} not found"
+        )
+
+
+@router.post("/{variant_id}/deactivate", response_model=ProductVariantResponse)
+async def deactivate_variant(
+    variant_id: int,
+    db: AsyncSession = Depends(get_db),
+):
+    """Soft-delete a variant by setting is_active to false."""
+    repo = ProductVariantRepository(db)
+    variant = await repo.get(variant_id)
+    
+    if not variant:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Product variant {variant_id} not found"
+        )
+    
+    variant = await repo.update(variant, {"is_active": False})
+    return ProductVariantResponse.model_validate(variant)
+
+
+@router.get("/pending-sync/zoho", response_model=list[ProductVariantResponse])
+async def get_pending_zoho_sync(
+    limit: Annotated[int, Query(ge=1, le=1000)] = 100,
+    db: AsyncSession = Depends(get_db),
+):
+    """Get variants pending Zoho synchronization."""
+    repo = ProductVariantRepository(db)
+    variants = await repo.get_pending_zoho_sync(limit=limit)
+    return [ProductVariantResponse.model_validate(v) for v in variants]
