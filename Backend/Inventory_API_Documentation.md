@@ -119,41 +119,158 @@ Manages sellable SKUs and the accounting link to Zoho.
 #### `POST /api/v1/inventory/receive`
 
 * **Auth:** `ADMIN` or `WAREHOUSE_OP`.
-* **Purpose:** Intake new physical items.
+* **Purpose:** Intake new physical items into inventory.
+* **Implementation Status:** ✅ IMPLEMENTED
 * **Logic:**
-1. Creates a new `INVENTORY_ITEM` record.
-2. Creates a corresponding `INVENTORY_TRANSACTION` with type `'RECEIVE'`.
-3. Links the transaction to `current_user.id` for accountability.
+  1. Validates serial number uniqueness (returns 409 if duplicate).
+  2. Looks up variant by SKU (returns 404 if not found).
+  3. Creates a new `INVENTORY_ITEM` record with status `AVAILABLE`.
 
-
-* **Payload:**
+* **Request Payload:**
 ```json
 {
-  "variant_sku": "00845-P-1-WY-N",
   "serial_number": "SN-998877",
+  "variant_sku": "00845-P-1-WY-N",
   "location_code": "A1-S2",
   "cost_basis": 45.00
 }
-
 ```
+
+* **Response (201 Created):**
+```json
+{
+  "id": 123,
+  "serial_number": "SN-998877",
+  "sku": "00845-P-1-WY-N",
+  "location_code": "A1-S2",
+  "status": "AVAILABLE",
+  "received_at": "2026-01-27T14:00:00Z"
+}
+```
+
+* **Error Responses:**
+  - `409 Conflict` - Serial number already exists
+  - `404 Not Found` - Variant SKU not found
 
 
 
 #### `POST /api/v1/inventory/move`
 
 * **Auth:** `ADMIN` or `WAREHOUSE_OP`.
-* **Purpose:** Update location of an item.
+* **Purpose:** Update location of a physical item.
+* **Implementation Status:** ✅ IMPLEMENTED
 * **Logic:**
-1. Updates `INVENTORY_ITEM.location_id`.
-2. Logs a `MOVE` transaction with `previous_location`, `new_location`, and `user_id`.
+  1. Finds inventory item by serial number (returns 404 if not found).
+  2. Records previous location.
+  3. Updates `location_code` field.
 
+* **Request Payload:**
+```json
+{
+  "serial_number": "SN-998877",
+  "new_location": "B2-S1"
+}
+```
 
-* **Payload:** `{ "serial_number": "...", "new_location": "B2-S1" }`
+* **Response (200 OK):**
+```json
+{
+  "serial_number": "SN-998877",
+  "previous_location": "A1-S2",
+  "new_location": "B2-S1",
+  "moved_at": "2026-01-27T14:05:00Z"
+}
+```
 
-#### `GET /api/v1/inventory/audit/{sku}`
+* **Error Responses:**
+  - `404 Not Found` - Serial number not found
+
+---
+
+#### `GET /api/v1/inventory/audit/{sku_or_serial}`
 
 * **Auth:** Any authenticated user.
-* **Purpose:** Returns total count + list of all serial numbers and locations for a specific SKU.
+* **Purpose:** Lookup inventory by SKU or serial number.
+* **Implementation Status:** ✅ IMPLEMENTED
+* **Logic:**
+  1. First attempts lookup by exact serial number.
+  2. If not found, looks up variant by SKU and returns all items for that variant.
+  3. Returns items in consistent `{ items: [...], total_count }` format.
+
+* **Request:** `GET /api/v1/inventory/audit/00845-P-1-WY-N`
+
+* **Response (200 OK):**
+```json
+{
+  "items": [
+    {
+      "id": 123,
+      "serial_number": "SN-998877",
+      "location_code": "A1-S2",
+      "status": "AVAILABLE",
+      "received_at": "2026-01-27T10:30:00Z",
+      "variant_id": 45,
+      "full_sku": "00845-P-1-WY-N"
+    }
+  ],
+  "total_count": 1
+}
+```
+
+---
+
+### Additional Inventory Endpoints
+
+#### `GET /api/v1/inventory`
+
+* **Auth:** Any authenticated user.
+* **Purpose:** List all inventory items with pagination.
+* **Query Parameters:** `skip` (default 0), `limit` (default 100)
+* **Response:** `PaginatedResponse` with `items` array.
+
+#### `GET /api/v1/inventory/{item_id}`
+
+* **Auth:** Any authenticated user.
+* **Purpose:** Get a single inventory item by database ID.
+* **Response:** `InventoryItemResponse` object.
+
+#### `GET /api/v1/inventory/serial/{serial_number}`
+
+* **Auth:** Any authenticated user.
+* **Purpose:** Get inventory item by serial number.
+* **Response:** `InventoryItemResponse` object or 404.
+
+#### `PATCH /api/v1/inventory/{item_id}`
+
+* **Auth:** `ADMIN` or `WAREHOUSE_OP`.
+* **Purpose:** Update an inventory item's fields.
+* **Payload:** Partial `InventoryItemUpdate` object.
+
+#### `DELETE /api/v1/inventory/{item_id}`
+
+* **Auth:** `ADMIN` only.
+* **Purpose:** Delete an inventory item.
+
+#### `POST /api/v1/inventory/{item_id}/reserve`
+
+* **Auth:** `ADMIN` or `SALES_REP`.
+* **Purpose:** Reserve an item (changes status to RESERVED).
+
+#### `POST /api/v1/inventory/{item_id}/sell`
+
+* **Auth:** `ADMIN` or `SALES_REP`.
+* **Purpose:** Mark an item as sold (changes status to SOLD).
+* **Payload:** `{ "sale_price": 150.00 }`
+
+#### `GET /api/v1/inventory/summary/{variant_id}`
+
+* **Auth:** Any authenticated user.
+* **Purpose:** Get stock summary for a variant (counts by status).
+
+#### `GET /api/v1/inventory/value/total`
+
+* **Auth:** `ADMIN` only.
+* **Purpose:** Get total inventory value calculation.
 
 ---
 

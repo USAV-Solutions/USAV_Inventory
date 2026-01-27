@@ -6,10 +6,13 @@ from datetime import datetime
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from sqlalchemy import or_
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.future import select
+from sqlalchemy.orm import selectinload
 
 from app.core.database import get_db
-from app.models import InventoryStatus
+from app.models import InventoryStatus, InventoryItem, ProductVariant
 from app.repositories import InventoryItemRepository, ProductVariantRepository
 from app.schemas import (
     InventoryItemCreate,
@@ -17,6 +20,12 @@ from app.schemas import (
     InventoryItemUpdate,
     InventoryItemWithVariant,
     InventorySummary,
+    InventoryReceiveRequest,
+    InventoryReceiveResponse,
+    InventoryMoveRequest,
+    InventoryMoveResponse,
+    InventoryAuditItem,
+    InventoryAuditResponse,
     PaginatedResponse,
 )
 
@@ -253,3 +262,164 @@ async def get_total_inventory_value(
             "status": status_filter.value if status_filter else None
         }
     }
+
+
+# ============================================================================
+# WAREHOUSE OPERATIONS ENDPOINTS
+# ============================================================================
+
+@router.post("/receive", response_model=InventoryReceiveResponse)
+async def receive_inventory(
+    data: InventoryReceiveRequest,
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Receive a new inventory item via barcode scan.
+    
+    This endpoint is designed for warehouse operations where items are scanned
+    at receiving. It creates a new inventory item with status AVAILABLE.
+    
+    - If variant_sku is provided, it will be used to find the variant
+    - If only serial_number is provided, variant must be determined externally
+    """
+    inventory_repo = InventoryItemRepository(db)
+    variant_repo = ProductVariantRepository(db)
+    
+    # Check for duplicate serial number
+    existing = await inventory_repo.get_by_serial(data.serial_number)
+    if existing:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"Inventory item with serial '{data.serial_number}' already exists"
+        )
+    
+    # Find variant by SKU if provided
+    variant = None
+    if data.variant_sku:
+        variant = await variant_repo.get_by_sku(data.variant_sku)
+        if not variant:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Product variant with SKU '{data.variant_sku}' not found"
+            )
+    else:
+        # If no SKU provided, we need at least one variant to exist
+        # For now, return an error asking for SKU
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="variant_sku is required to receive inventory"
+        )
+    
+    # Create the inventory item
+    now = datetime.now()
+    item_data = {
+        "serial_number": data.serial_number,
+        "variant_id": variant.id,
+        "status": InventoryStatus.AVAILABLE,
+        "location_code": data.location_code,
+        "cost_basis": data.cost_basis,
+        "received_at": now,
+    }
+    
+    item = await inventory_repo.create(item_data)
+    
+    return InventoryReceiveResponse(
+        id=item.id,
+        serial_number=item.serial_number,
+        sku=variant.full_sku,
+        location_code=item.location_code,
+        status=item.status.value,
+        received_at=item.received_at or now,
+    )
+
+
+@router.post("/move", response_model=InventoryMoveResponse)
+async def move_inventory(
+    data: InventoryMoveRequest,
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Move an inventory item to a new location.
+    
+    This endpoint updates the location_code of an item identified by serial number.
+    """
+    repo = InventoryItemRepository(db)
+    
+    # Find the item by serial number
+    item = await repo.get_by_serial(data.serial_number)
+    if not item:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Inventory item with serial '{data.serial_number}' not found"
+        )
+    
+    # Store previous location
+    previous_location = item.location_code
+    
+    # Update location
+    item = await repo.update(item, {"location_code": data.new_location})
+    
+    return InventoryMoveResponse(
+        serial_number=item.serial_number,
+        previous_location=previous_location,
+        new_location=item.location_code,
+        moved_at=datetime.now(),
+    )
+
+
+@router.get("/audit/{sku_or_serial}", response_model=InventoryAuditResponse)
+async def audit_inventory(
+    sku_or_serial: str,
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Audit/lookup inventory by SKU or serial number.
+    
+    Returns all matching inventory items with their locations and statuses.
+    This endpoint is used by warehouse operations for item lookup and
+    stock verification.
+    
+    - If the input looks like a serial number, search by serial
+    - If it looks like a SKU, search for all items of that variant
+    """
+    # First, try to find by serial number (exact match)
+    inventory_repo = InventoryItemRepository(db)
+    variant_repo = ProductVariantRepository(db)
+    
+    items = []
+    
+    # Try serial number lookup first
+    item = await inventory_repo.get_by_serial(sku_or_serial)
+    if item:
+        # Get the variant for SKU info
+        variant = await variant_repo.get(item.variant_id)
+        items.append(InventoryAuditItem(
+            id=item.id,
+            serial_number=item.serial_number,
+            location_code=item.location_code,
+            status=item.status.value,
+            received_at=item.received_at,
+            variant_id=item.variant_id,
+            full_sku=variant.full_sku if variant else None,
+        ))
+    else:
+        # Try SKU lookup - find variant first
+        variant = await variant_repo.get_by_sku(sku_or_serial)
+        if variant:
+            # Get all inventory items for this variant
+            variant_items = await inventory_repo.get_by_variant(variant.id, limit=1000)
+            for inv_item in variant_items:
+                items.append(InventoryAuditItem(
+                    id=inv_item.id,
+                    serial_number=inv_item.serial_number,
+                    location_code=inv_item.location_code,
+                    status=inv_item.status.value,
+                    received_at=inv_item.received_at,
+                    variant_id=inv_item.variant_id,
+                    full_sku=variant.full_sku,
+                ))
+    
+    return InventoryAuditResponse(
+        items=items,
+        total_count=len(items),
+    )

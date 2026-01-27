@@ -1,0 +1,52 @@
+import { Routes, Route, Navigate } from 'react-router-dom'
+import { useAuth } from './hooks/useAuth'
+import Login from './pages/Login'
+import Dashboard from './pages/Dashboard'
+import WarehouseOps from './pages/WarehouseOps'
+import StockLookup from './pages/StockLookup'
+import ProductIdentities from './pages/ProductIdentities'
+import VariantManager from './pages/VariantManager'
+import Layout from './components/common/Layout'
+import RoleGuard from './components/guards/RoleGuard'
+
+function App() {
+  const { isAuthenticated } = useAuth()
+
+  return (
+    <Routes>
+      {/* Public Route */}
+      <Route
+        path="/login"
+        element={isAuthenticated ? <Navigate to="/" replace /> : <Login />}
+      />
+
+      {/* Protected Routes */}
+      <Route
+        element={
+          <RoleGuard allowedRoles={['ADMIN', 'WAREHOUSE_OP', 'SALES_REP']}>
+            <Layout />
+          </RoleGuard>
+        }
+      >
+        <Route path="/" element={<Dashboard />} />
+
+        {/* Warehouse Routes */}
+        <Route element={<RoleGuard allowedRoles={['ADMIN', 'WAREHOUSE_OP']} />}>
+          <Route path="/warehouse/ops" element={<WarehouseOps />} />
+          <Route path="/warehouse/lookup" element={<StockLookup />} />
+        </Route>
+
+        {/* Catalog Routes */}
+        <Route element={<RoleGuard allowedRoles={['ADMIN', 'SALES_REP']} />}>
+          <Route path="/catalog/identities" element={<ProductIdentities />} />
+          <Route path="/catalog/variants" element={<VariantManager />} />
+        </Route>
+      </Route>
+
+      {/* Catch all */}
+      <Route path="*" element={<Navigate to="/" replace />} />
+    </Routes>
+  )
+}
+
+export default App

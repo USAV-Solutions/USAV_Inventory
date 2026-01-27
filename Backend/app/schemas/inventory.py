@@ -2,7 +2,7 @@
 Inventory Item schemas.
 """
 from datetime import datetime
-from typing import Optional
+from typing import Optional, List
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -57,3 +57,63 @@ class InventorySummary(BaseModel):
     reserved: int = Field(default=0)
     rma: int = Field(default=0)
     damaged: int = Field(default=0)
+
+
+# ============================================================================
+# WAREHOUSE OPERATIONS SCHEMAS
+# ============================================================================
+
+class InventoryReceiveRequest(BaseModel):
+    """Schema for receiving inventory via barcode scan."""
+    serial_number: str = Field(..., min_length=1, max_length=100, description="Scanned serial number/barcode")
+    variant_sku: Optional[str] = Field(None, description="Optional SKU if known")
+    location_code: Optional[str] = Field(None, max_length=50, description="Optional initial location")
+    cost_basis: Optional[float] = Field(None, ge=0, description="Optional acquisition cost")
+
+
+class InventoryReceiveResponse(BaseModel):
+    """Response after receiving an inventory item."""
+    id: int
+    serial_number: str
+    sku: str = Field(..., description="Full SKU of the variant")
+    location_code: Optional[str] = None
+    status: str
+    received_at: datetime
+    
+    model_config = ConfigDict(from_attributes=True)
+
+
+class InventoryMoveRequest(BaseModel):
+    """Schema for moving inventory to a new location."""
+    serial_number: str = Field(..., min_length=1, max_length=100, description="Serial number to move")
+    new_location: str = Field(..., min_length=1, max_length=50, description="Target location code")
+
+
+class InventoryMoveResponse(BaseModel):
+    """Response after moving an inventory item."""
+    serial_number: str
+    previous_location: Optional[str] = None
+    new_location: str
+    moved_at: datetime
+    
+    model_config = ConfigDict(from_attributes=True)
+
+
+class InventoryAuditItem(BaseModel):
+    """Single item in audit response."""
+    id: int
+    serial_number: Optional[str] = None
+    location_code: Optional[str] = None
+    status: str
+    received_at: Optional[datetime] = None
+    variant_id: int
+    full_sku: Optional[str] = None
+    
+    model_config = ConfigDict(from_attributes=True)
+
+
+class InventoryAuditResponse(BaseModel):
+    """Response for inventory audit/lookup."""
+    items: List[InventoryAuditItem] = Field(default_factory=list)
+    total_count: int = Field(default=0)
+

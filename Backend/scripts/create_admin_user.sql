@@ -27,10 +27,10 @@ INSERT INTO users (
     created_at,
     updated_at
 ) VALUES (
-    'admin',                          -- username
-    'admin@example.com',              -- email (optional, can be NULL)
-    '$2b$12$...',                     -- hashed_password (bcrypt hash - REPLACE THIS!)
-    'Administrator',                  -- full_name (optional, can be NULL)
+    'sysad',                          -- username
+    'it@usavshop.com',              -- email (optional, can be NULL)
+    '$2b$12$fyAr8X8Q60IH6oXLWw7qL.1/UmPMHoAoQVE3RUdI/32r4ImEHysrK',                     -- hashed_password (bcrypt hash - REPLACE THIS!)
+    'System Administrator',                  -- full_name (optional, can be NULL)
     'ADMIN',                          -- role (must be ADMIN, WAREHOUSE_OP, SALES_REP, or SYSTEM_BOT)
     true,                             -- is_active
     true,                             -- is_superuser

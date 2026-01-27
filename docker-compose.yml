@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   # ==========================================================================
   # PostgreSQL Database
@@ -62,7 +60,7 @@ services:
 
   # ==========================================================================
   # Development Backend (with hot reload)
-  # ==========================================================================
+  # ==============================================                                      
   backend-dev:
     build:
       context: ./Backend
@@ -70,7 +68,7 @@ services:
     container_name: usav_backend_dev
     profiles:
       - dev
-    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+    command: uvicorn app.main:app --host 0.0.0.0 -                                      
     volumes:
       - ./Backend:/app
     environment:
@@ -89,9 +87,9 @@ services:
     networks:
       - usav_network
 
-  # ==========================================================================
+  # ==============================================                                      
   # Database Migrations (run once)
-  # ==========================================================================
+  # ==============================================                                      
   migrations:
     build:
       context: ./Backend
@@ -112,9 +110,9 @@ services:
     networks:
       - usav_network
 
-  # ==========================================================================
+  # ==============================================                                      
   # Automatic Backups
-  # ==========================================================================
+  # ==============================================                                      
   db-backup:
     image: prodrigestivill/postgres-backup-local
     container_name: usav_backup
@@ -138,6 +136,54 @@ services:
       - usav_network
 
   # ==========================================================================
+  # React Frontend
+  # ==========================================================================
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: usav_frontend
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    depends_on:
+      backend:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:3000"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    networks:
+      - usav_network
+
+  # ==========================================================================
+  # Development Frontend (with hot reload)
+  # ==========================================================================
+  frontend-dev:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.dev
+    container_name: usav_frontend_dev
+    profiles:
+      - dev
+    command: npm run dev -- --host 0.0.0.0
+    volumes:
+      - ./frontend/src:/app/src
+      - ./frontend/index.html:/app/index.html
+      - ./frontend/vite.config.ts:/app/vite.config.ts
+      - ./frontend/tsconfig.json:/app/tsconfig.json
+      - ./frontend/tsconfig.node.json:/app/tsconfig.node.json
+    ports:
+      - "3000:3000"
+    depends_on:
+      backend:
+        condition: service_healthy
+    networks:
+      - usav_network
+
+  # ==========================================================================
   # pgAdmin (Database Management UI) - Optional
   # ==========================================================================
   pgadmin:
@@ -147,7 +193,7 @@ services:
       - tools
     restart: unless-stopped
     environment:
-      PGADMIN_DEFAULT_EMAIL: ${PGADMIN_EMAIL:-admin@usav.local}
+      PGADMIN_DEFAULT_EMAIL: ${PGADMIN_EMAIL:-it@usavshop.com}
       PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_PASSWORD:-admin}
       PGADMIN_CONFIG_SERVER_MODE: "False"
     ports:

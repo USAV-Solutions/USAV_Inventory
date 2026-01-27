@@ -33,6 +33,12 @@ from app.schemas.inventory import (
     InventoryItemUpdate,
     InventoryItemWithVariant,
     InventorySummary,
+    InventoryReceiveRequest,
+    InventoryReceiveResponse,
+    InventoryMoveRequest,
+    InventoryMoveResponse,
+    InventoryAuditItem,
+    InventoryAuditResponse,
 )
 from app.schemas.listings import (
     PlatformListingCreate,
@@ -76,6 +82,12 @@ __all__ = [
     "InventoryItemUpdate",
     "InventoryItemWithVariant",
     "InventorySummary",
+    "InventoryReceiveRequest",
+    "InventoryReceiveResponse",
+    "InventoryMoveRequest",
+    "InventoryMoveResponse",
+    "InventoryAuditItem",
+    "InventoryAuditResponse",
     # Listings
     "PlatformListingCreate",
     "PlatformListingResponse",

@@ -87,45 +87,291 @@ USAV_Database_Construct/
             └── 0002_add_users.py        # Users table with RBAC
 ```
 
+## ✨ Core Features
+
+### 1. **Two-Layer Product Identification**
+   - **UPIS-H (Unique Product Identity Signature)**: Immutable engineering identifier
+   - **Full SKU**: Dynamic sales identifier with variant attributes (color, condition, size)
+   - Automatic generation and validation for data integrity
+
+### 2. **Comprehensive Inventory Management**
+   - Real-time stock tracking with multiple status types
+   - Inventory reservations and sales workflows
+   - Inventory value calculations and reporting
+   - Batch operations for efficient warehouse operations
+
+### 3. **Platform Integration (Hub & Spoke)**
+   - Multi-platform synchronization (Zoho, Amazon, eBay, Ecwid)
+   - Pending sync tracking and error handling
+   - Automatic status updates across platforms
+   - Configurable sync schedules and rules
+
+### 4. **Bundle & Kit Management**
+   - Define products as bundles of multiple components
+   - Automatic BOM (Bill of Materials) generation
+   - Track parent-child relationships
+   - Support for complex product hierarchies
+
+### 5. **Role-Based Access Control (RBAC)**
+   - Four permission levels: ADMIN, WAREHOUSE_OP, SALES_REP, SYSTEM_BOT
+   - Admin-controlled user management (no self-registration)
+   - JWT-based authentication with secure password hashing
+   - Fine-grained endpoint access control
+
+### 6. **Database Migrations & Version Control**
+   - Alembic-based migration system
+   - Track schema changes over time
+   - Automatic migration deployment in Docker
+   - Rollback capability for production safety
+
+### 7. **Automated Backups**
+   - Daily database backups (configurable schedule)
+   - 7-day daily, 4-week weekly, 6-month monthly retention
+   - Persistent backup storage in local filesystem
+   - Easy restore capability
+
+### 8. **API Documentation**
+   - Interactive OpenAPI/Swagger documentation
+   - ReDoc alternative documentation view
+   - Auto-generated from code with Pydantic schemas
+   - Built-in request/response examples
+
+### 9. **Production-Ready Architecture**
+   - Async/await with asyncio and asyncpg
+   - Connection pooling for database efficiency
+   - Health checks for all services
+   - Docker-based containerization
+
 ## 🚀 Quick Start
 
 ### Prerequisites
 
-- Docker & Docker Compose
+- Docker & Docker Compose (v1.29+)
 - (Optional) Python 3.12+ for local development
 
 ### 1. Clone and Configure
 
 ```bash
-cd USAV_Database_Construct
+cd USAV_Inventory
 
-# Create environment file
-cp .env.example .env
+# Create environment file from template
+cp Backend/.env.example .env
 # Edit .env with your settings (especially DB_PASS for production!)
 ```
 
-### 2. Start Services
-
-```bash
-# Start database and backend (production mode)
-docker-compose up -d
-
-# Or start with development mode (hot reload)
-docker-compose --profile dev up -d backend-dev
-
-# Run database migrations
-docker-compose --profile migrate run --rm migrations
-
-# (Optional) Start pgAdmin for database management
-docker-compose --profile tools up -d pgadmin
-```
-
-### 3. Access the API
+### 2. Access the Application
 
 - **API Documentation**: http://localhost:8000/api/v1/docs
 - **ReDoc**: http://localhost:8000/api/v1/redoc
+- **Frontend**: http://localhost:3000
 - **Health Check**: http://localhost:8000/health
-- **pgAdmin** (if enabled): http://localhost:5050
+- **pgAdmin** (optional): http://localhost:5050
+
+## 🐳 Docker Deployment Guide
+
+### Environment Configuration
+
+Create a `.env` file in the root directory with the following variables:
+
+```env
+# Database Configuration
+DB_USER=postgres
+DB_PASS=your_secure_password_123
+DB_NAME=inventory_system
+
+# Environment Type (development/staging/production)
+ENVIRONMENT=development
+DEBUG=false
+
+# Zoho Integration (optional)
+ZOHO_CLIENT_ID=your_client_id
+ZOHO_CLIENT_SECRET=your_client_secret
+ZOHO_REFRESH_TOKEN=your_refresh_token
+ZOHO_ORGANIZATION_ID=your_org_id
+
+# pgAdmin (optional)
+PGADMIN_EMAIL=it@usavshop.local
+PGADMIN_PASSWORD=admin_password
+```
+
+### Production Deployment (Full Stack)
+
+**Start all services** (database, backend, frontend, backups):
+
+```bash
+docker-compose up -d
+```
+
+This starts:
+- ✅ PostgreSQL database (port 5432)
+- ✅ FastAPI backend (port 8000)
+- ✅ React frontend (port 3000)
+- ✅ Automated daily backups
+- ✅ Network connectivity between services
+
+**Initialize the database** (run once):
+
+```bash
+docker-compose --profile migrate run --rm migrations
+```
+
+This executes Alembic migrations to create tables and schema.
+
+**Verify services are running**:
+
+```bash
+docker-compose ps
+```
+
+Expected output:
+```
+NAME                COMMAND                STATUS
+usav_db             postgres               Up (healthy)
+usav_backend        uvicorn app.main:app   Up (healthy)
+usav_frontend       npm run build           Up (healthy)
+usav_backup         postgres-backup        Up
+```
+
+### Development Deployment (Hot Reload)
+
+**Start with development profiles** (auto-reloading backend & frontend):
+
+```bash
+docker-compose --profile dev up -d
+```
+
+This starts:
+- ✅ PostgreSQL database
+- ✅ FastAPI backend (with hot reload on code changes)
+- ✅ React frontend (with hot reload on code changes)
+- ✅ Volume mounts for live code editing
+
+**Edit code directly** in your IDE and changes reflect immediately in containers.
+
+### Database Management (Optional)
+
+**Start pgAdmin UI** for visual database management:
+
+```bash
+docker-compose --profile tools up -d pgadmin
+```
+
+Then visit http://localhost:5050
+- Email: it@usavshop.com (configured in .env)
+- Password: admin_password (configured in .env)
+
+**Connect to PostgreSQL from pgAdmin**:
+1. In pgAdmin, click "Register" → "Server"
+2. Name: "USAV Database"
+3. Connection tab → Hostname: `db`, Username: `postgres`, Password: `your_db_password`
+4. Save
+
+### Service-Specific Commands
+
+**Start only database and backend** (no frontend):
+```bash
+docker-compose up -d db backend
+```
+
+**View real-time logs** from all services:
+```bash
+docker-compose logs -f
+```
+
+**View logs from specific service**:
+```bash
+docker-compose logs -f backend
+docker-compose logs -f frontend
+docker-compose logs -f db
+```
+
+**Execute command inside container**:
+```bash
+# Access backend shell
+docker-compose exec backend bash
+
+# Access database CLI
+docker-compose exec db psql -U postgres -d inventory_system
+```
+
+**Run database migrations manually**:
+```bash
+# Auto-generate migration from model changes
+docker-compose --profile migrate run --rm migrations \
+    alembic revision --autogenerate -m "Add new column"
+
+# Apply latest migrations
+docker-compose --profile migrate run --rm migrations \
+    alembic upgrade head
+
+# Rollback to previous migration
+docker-compose --profile migrate run --rm migrations \
+    alembic downgrade -1
+```
+
+**Stop all services**:
+```bash
+docker-compose down
+```
+
+**Stop and remove all data** (careful!):
+```bash
+docker-compose down -v
+```
+
+**Restart a specific service**:
+```bash
+docker-compose restart backend
+```
+
+### Backup Management
+
+**Manual backup** (in addition to automated daily backups):
+```bash
+docker-compose exec db-backup backup
+```
+
+**Restore from backup**:
+```bash
+# List available backups
+ls backups/
+
+# Restore specific backup
+docker-compose exec db pg_restore -U postgres -d inventory_system /backups/<backup_file>
+```
+
+**View automated backup settings** in `docker-compose.yml`:
+- Daily schedule: `@daily` (customizable to `@hourly`, `@weekly`, etc.)
+- Retention: 7 days daily, 4 weeks weekly, 6 months monthly
+
+## 🎯 Complete Project Stack
+
+### Backend (FastAPI)
+Located in [Backend/](Backend/) directory:
+- **Framework**: FastAPI with async SQLAlchemy
+- **Database**: PostgreSQL with async drivers
+- **Authentication**: JWT tokens with RBAC
+- **API Docs**: Auto-generated OpenAPI/Swagger & ReDoc
+- **Port**: 8000
+
+### Frontend (React + TypeScript)
+Located in [frontend/](frontend/) directory:
+- **Framework**: React with Vite build tool
+- **Language**: TypeScript for type safety
+- **Build**: Docker-optimized production builds
+- **Port**: 3000
+
+### Database (PostgreSQL)
+- **Version**: PostgreSQL 16 Alpine (lightweight)
+- **Port**: 5432
+- **Schema**: Fully managed via Alembic migrations
+- **Backup**: Automated daily backups with configurable retention
+
+### Supporting Services
+- **Alembic**: Database migration management
+- **pgAdmin**: Optional web UI for database management
+- **Backup Service**: Automated daily database backups with retention policies
+- **Docker Compose**: Orchestrates all containers and networking
 
 ## 📊 Database Schema
 
@@ -282,69 +528,198 @@ async def admin_only_endpoint():
 
 ## �🔧 Development
 
-### Local Development (without Docker)
+### Using Docker (Recommended)
+
+```bash
+# Start with live code reload
+docker-compose --profile dev up -d
+
+# Watch logs
+docker-compose logs -f
+
+# Access backend shell
+docker-compose exec backend bash
+
+# Run tests in container
+docker-compose exec backend pytest
+
+# Execute database commands
+docker-compose exec db psql -U postgres -d inventory_system
+```
+
+### Local Development (Without Docker)
+
+#### Backend Setup
 
 ```bash
 cd Backend
 
 # Create virtual environment
 python -m venv venv
-source venv/bin/activate  # Windows: venv\Scripts\activate
+
+# Activate (Windows)
+venv\Scripts\activate
+# Or activate (Linux/Mac)
+source venv/bin/activate
 
 # Install dependencies
 pip install -r requirements.txt
 
 # Set environment variables
-export DB_HOST=localhost
-export DB_PASS=your_password
-export SECRET_KEY=$(openssl rand -hex 32)  # Generate secure key
+set DB_HOST=localhost
+set DB_PASS=your_password
+set DB_USER=postgres
+set DB_NAME=inventory_system
+set SECRET_KEY=your_secret_key_here
 
-# Run migrations
+# Run migrations (requires PostgreSQL running separately)
 alembic upgrade head
 
-# Create admin user (optional - via API or direct DB insert)
-# Default test user: admin / admin_password
-
-# Start development server
-uvicorn app.main:app --reload
+# Start development server (with auto-reload)
+uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 ```
 
-### Creating New Migrations
+API will be available at http://localhost:8000/api/v1/docs
+
+#### Frontend Setup
 
 ```bash
-# Auto-generate migration from model changes
-docker-compose --profile migrate run --rm migrations \
-    alembic revision --autogenerate -m "description"
+cd frontend
 
-# Or manually
-docker-compose --profile migrate run --rm migrations \
-    alembic revision -m "description"
+# Install dependencies
+npm install
 
-# Apply migrations
-docker-compose --profile migrate run --rm migrations \
-    alembic upgrade head
+# Start development server (with hot reload)
+npm run dev
+
+# Build for production
+npm run build
+
+# Preview production build
+npm run preview
 ```
 
-### Running Tests
+Frontend will be available at http://localhost:5173 (Vite default port)
 
+### Database Migrations
+
+**Auto-generate migration** from model changes:
 ```bash
 # In Docker
-docker-compose exec backend pytest
+docker-compose --profile migrate run --rm migrations \
+    alembic revision --autogenerate -m "Add user table"
 
-# Local
+# Locally
+alembic revision --autogenerate -m "Add user table"
+```
+
+**Apply migrations**:
+```bash
+# In Docker
+docker-compose --profile migrate run --rm migrations alembic upgrade head
+
+# Locally
+alembic upgrade head
+```
+
+**Rollback migrations**:
+```bash
+# Rollback last migration
+alembic downgrade -1
+
+# Rollback to specific revision
+alembic downgrade ae1027a6acf
+```
+
+**View migration history**:
+```bash
+alembic current
+alembic history
+```
+
+### Testing
+
+**Run all tests** in Docker:
+```bash
+docker-compose exec backend pytest
+```
+
+**Run specific test file**:
+```bash
+docker-compose exec backend pytest tests/test_auth.py
+```
+
+**Run with coverage**:
+```bash
+docker-compose exec backend pytest --cov=app tests/
+```
+
+**Local testing** (requires local environment setup):
+```bash
 pytest
+pytest -v  # Verbose output
+pytest --cov=app  # With coverage
 ```
 
 ## 🔐 Production Considerations
 
-1. **Change default passwords** in `.env`
-2. **Generate strong SECRET_KEY**: `openssl rand -hex 32`
-3. **Enable HTTPS** via reverse proxy (nginx/traefik)
-4. **Configure CORS origins** for your domains
-5. **Set up monitoring** (Prometheus, Grafana)
-6. **Review backup schedule** in docker-compose.yml
-7. **Consider read replicas** for scaling
-8. **Rotate JWT secret** periodically for enhanced security
+### Security Checklist
+
+- [ ] **Change all default passwords** in `.env` - use strong, unique passwords
+- [ ] **Generate strong SECRET_KEY**: 
+  ```bash
+  openssl rand -hex 32
+  ```
+- [ ] **Enable HTTPS** via reverse proxy (nginx/traefik) - never expose HTTP in production
+- [ ] **Configure CORS origins** for your specific domains (update in Backend/.env)
+- [ ] **Set up secrets management** - use environment variables or secrets manager
+- [ ] **Rotate JWT secret** periodically for enhanced security
+- [ ] **Enable database backups** - verify backup process works (test restore)
+- [ ] **Configure health checks** - monitor all service health endpoints
+
+### Performance & Scaling
+
+- [ ] **Review backup schedule** in docker-compose.yml (currently daily)
+- [ ] **Set up monitoring** (Prometheus, Grafana, or similar)
+- [ ] **Configure logging** - centralize logs (ELK stack, CloudWatch, etc.)
+- [ ] **Consider read replicas** for scaling database reads
+- [ ] **Implement caching** - Redis for frequent queries
+- [ ] **Use CDN** for static frontend assets
+- [ ] **Configure rate limiting** on API endpoints
+- [ ] **Set up alerts** for service failures and resource exhaustion
+
+### Deployment Best Practices
+
+```bash
+# Use production environment settings
+ENVIRONMENT=production
+DEBUG=false
+
+# Use strong database password (at least 16 characters)
+DB_PASS=your_very_secure_password_with_special_chars_123!@#
+
+# Disable unnecessary profiles (dev, tools)
+docker-compose -f docker-compose.yml up -d
+
+# Verify all services are healthy
+docker-compose ps
+
+# Check logs for any errors
+docker-compose logs
+
+# Set resource limits in docker-compose.yml for stability
+# - Memory limits
+# - CPU limits
+# - Restart policies
+```
+
+## 📚 Additional Documentation
+
+- [Database Documentation](database_documentation_v1.0.md) - Detailed schema, entities, and relationships
+- [Database ERD](database_erd.mmd) - Visual entity relationship diagram
+- [Backend Testing Guide](Backend/TESTING.md) - Test structure and examples
+- [Frontend README](frontend/README.md) - Frontend-specific setup and development
+- [Docker Guide](DOCKER_GUIDE.md) - Detailed Docker troubleshooting
 
 ## 📝 License
 
