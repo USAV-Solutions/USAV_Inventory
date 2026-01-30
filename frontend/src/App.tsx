@@ -5,6 +5,7 @@ import Dashboard from './pages/Dashboard'
 import WarehouseOps from './pages/WarehouseOps'
 import StockLookup from './pages/StockLookup'
 import InventoryManagement from './pages/InventoryManagement'
+import ProductListings from './pages/ProductListings'
 import Layout from './components/common/Layout'
 import RoleGuard from './components/guards/RoleGuard'
 
@@ -38,6 +39,7 @@ function App() {
         {/* Catalog Routes */}
         <Route element={<RoleGuard allowedRoles={['ADMIN', 'SALES_REP']} />}>
           <Route path="/catalog/inventory" element={<InventoryManagement />} />
+          <Route path="/catalog/listings" element={<ProductListings />} />
         </Route>
       </Route>
 

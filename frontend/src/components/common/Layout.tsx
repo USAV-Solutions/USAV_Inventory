@@ -25,6 +25,7 @@ import {
   Inventory,
   Logout,
   Person,
+  Storefront,
 } from '@mui/icons-material'
 import { useAuth } from '../../hooks/useAuth'
 
@@ -42,6 +43,7 @@ const navItems: NavItem[] = [
   { title: 'Scan Tool', path: '/warehouse/ops', icon: <QrCodeScanner />, roles: ['ADMIN', 'WAREHOUSE_OP'] },
   { title: 'Stock Lookup', path: '/warehouse/lookup', icon: <Search />, roles: ['ADMIN', 'WAREHOUSE_OP'] },
   { title: 'Inventory Management', path: '/catalog/inventory', icon: <Inventory />, roles: ['ADMIN', 'SALES_REP'] },
+  { title: 'Product Listings', path: '/catalog/listings', icon: <Storefront />, roles: ['ADMIN', 'SALES_REP'] },
 ]
 
 export default function Layout() {

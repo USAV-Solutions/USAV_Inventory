@@ -147,3 +147,39 @@ export interface BundleComponent {
   quantity_required: number
   role: 'Primary' | 'Accessory' | 'Satellite'
 }
+
+// Platform types
+export type Platform = 'AMAZON' | 'EBAY_MEKONG' | 'EBAY_USAV' | 'EBAY_DRAGON' | 'ECWID'
+export type PlatformSyncStatus = 'PENDING' | 'SYNCED' | 'ERROR'
+
+export interface PlatformListing {
+  id: number
+  variant_id: number
+  platform: Platform
+  external_ref_id?: string
+  listed_name?: string
+  listed_description?: string
+  listing_price?: number
+  sync_status: PlatformSyncStatus
+  last_synced_at?: string
+  sync_error_message?: string
+  created_at: string
+  updated_at: string
+  variant?: Variant
+}
+
+export interface PlatformListingCreate {
+  variant_id: number
+  platform: Platform
+  external_ref_id?: string
+  listed_name?: string
+  listed_description?: string
+  listing_price?: number
+}
+
+export interface PlatformListingUpdate {
+  external_ref_id?: string
+  listed_name?: string
+  listed_description?: string
+  listing_price?: number
+}

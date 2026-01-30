@@ -93,10 +93,10 @@ class BundleRole(str, enum.Enum):
 
 class Platform(str, enum.Enum):
     """Supported sales platforms."""
-    ZOHO = "ZOHO"
-    AMAZON_US = "AMAZON_US"
-    AMAZON_CA = "AMAZON_CA"
-    EBAY = "EBAY"
+    AMAZON = "AMAZON"
+    EBAY_MEKONG = "EBAY_MEKONG"
+    EBAY_USAV = "EBAY_USAV"
+    EBAY_DRAGON = "EBAY_DRAGON"
     ECWID = "ECWID"
 
 
@@ -635,6 +635,16 @@ class PlatformListing(Base, TimestampMixin):
         String(100),
         nullable=True,
         comment="The ID on the remote platform (Zoho Item ID, ASIN).",
+    )
+    listed_name: Mapped[Optional[str]] = mapped_column(
+        String(500),
+        nullable=True,
+        comment="The product name as displayed on this platform.",
+    )
+    listed_description: Mapped[Optional[str]] = mapped_column(
+        Text,
+        nullable=True,
+        comment="The product description as displayed on this platform.",
     )
     listing_price: Mapped[Optional[Decimal]] = mapped_column(
         Numeric(10, 2),

@@ -27,7 +27,7 @@ zoho_sync_status_enum = postgresql.ENUM('PENDING', 'SYNCED', 'ERROR', 'DIRTY', n
 platform_sync_status_enum = postgresql.ENUM('PENDING', 'SYNCED', 'ERROR', name='platform_sync_status_enum', create_type=False)
 inventory_status_enum = postgresql.ENUM('AVAILABLE', 'SOLD', 'RESERVED', 'RMA', 'DAMAGED', name='inventory_status_enum', create_type=False)
 bundle_role_enum = postgresql.ENUM('Primary', 'Accessory', 'Satellite', name='bundle_role_enum', create_type=False)
-platform_enum = postgresql.ENUM('ZOHO', 'AMAZON_US', 'AMAZON_CA', 'EBAY', 'ECWID', name='platform_enum', create_type=False)
+platform_enum = postgresql.ENUM('AMAZON', 'EBAY_MEKONG', 'EBAY_USAV', 'EBAY_DRAGON', 'ECWID', name='platform_enum', create_type=False)
 
 
 def upgrade() -> None:
@@ -161,6 +161,10 @@ def upgrade() -> None:
                   comment='ZOHO, AMAZON_US, EBAY, etc.'),
         sa.Column('external_ref_id', sa.String(length=100), nullable=True,
                   comment='The ID on the remote platform (Zoho Item ID, ASIN).'),
+        sa.Column('listed_name', sa.String(length=500), nullable=True,
+                  comment='The product name as displayed on this platform.'),
+        sa.Column('listed_description', sa.Text(), nullable=True,
+                  comment='The product description as displayed on this platform.'),
         sa.Column('listing_price', sa.Numeric(precision=10, scale=2), nullable=True,
                   comment='The specific price for this platform.'),
         sa.Column('sync_status', platform_sync_status_enum, nullable=False, server_default='PENDING',

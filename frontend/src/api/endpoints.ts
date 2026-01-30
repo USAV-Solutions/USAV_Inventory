@@ -35,3 +35,14 @@ export const LOOKUPS = {
   LCI_DEFINITIONS: '/lci-definitions',
   LCI_DEFINITION: (id: number) => `/lci-definitions/${id}`,
 }
+
+// Listing endpoints
+export const LISTINGS = {
+  LIST: '/listings',
+  LISTING: (id: number) => `/listings/${id}`,
+  BY_PLATFORM_REF: (platform: string, refId: string) => `/listings/platform/${platform}/ref/${refId}`,
+  PENDING: '/listings/pending',
+  ERRORS: '/listings/errors',
+  MARK_SYNCED: (id: number) => `/listings/${id}/mark-synced`,
+  MARK_ERROR: (id: number) => `/listings/${id}/mark-error`,
+}

@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import {
   Dialog,
   DialogTitle,
@@ -22,8 +22,11 @@ import {
   InputAdornment,
   CircularProgress,
   Paper,
+  ToggleButton,
+  ToggleButtonGroup,
+  Alert,
 } from '@mui/material'
-import { Add, Search } from '@mui/icons-material'
+import { Add, Search, AddCircle, ContentCopy } from '@mui/icons-material'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import axiosClient from '../../api/axiosClient'
 import { CATALOG, LOOKUPS } from '../../api/endpoints'
@@ -33,7 +36,11 @@ import {
   Condition,
   LCIDefinition,
   ProductIdentity,
+  ProductFamily,
+  Variant,
 } from '../../types/inventory'
+
+type CreationMode = 'new' | 'existing'
 
 interface CreateProductDialogProps {
   open: boolean
@@ -51,6 +58,12 @@ const typeOptions: { value: ItemType; label: string; description: string }[] = [
 
 export default function CreateProductDialog({ open, onClose }: CreateProductDialogProps) {
   const queryClient = useQueryClient()
+  
+  // Creation mode: 'new' = create entirely new product, 'existing' = add variant to existing parent
+  const [creationMode, setCreationMode] = useState<CreationMode>('new')
+  
+  // For 'existing' mode - select an existing parent identity
+  const [selectedExistingParent, setSelectedExistingParent] = useState<ProductIdentity | null>(null)
   
   // Form state
   const [itemType, setItemType] = useState<ItemType>('Product')
@@ -117,6 +130,37 @@ export default function CreateProductDialog({ open, onClose }: CreateProductDial
     enabled: open,
   })
 
+  // Fetch families for enriching identity data
+  const { data: familiesData } = useQuery({
+    queryKey: ['families'],
+    queryFn: async () => {
+      const response = await axiosClient.get(CATALOG.FAMILIES, { params: { limit: 1000 } })
+      return response.data.items || []
+    },
+    enabled: open,
+  })
+
+  // Fetch existing variants (to know what color/condition combos exist)
+  const { data: variantsData } = useQuery({
+    queryKey: ['variants'],
+    queryFn: async () => {
+      const response = await axiosClient.get(CATALOG.VARIANTS, { params: { limit: 1000 } })
+      return response.data.items || []
+    },
+    enabled: open,
+  })
+
+  // Enhanced identities with family data
+  const enhancedIdentities = useMemo(() => {
+    if (!identitiesData || !familiesData) return []
+    const familyMap = new Map<number, ProductFamily>()
+    familiesData.forEach((f: ProductFamily) => familyMap.set(f.product_id, f))
+    return identitiesData.map((i: ProductIdentity) => ({
+      ...i,
+      family: familyMap.get(i.product_id),
+    }))
+  }, [identitiesData, familiesData])
+
   // Fetch LCI definitions for selected parent product
   const { data: lciData } = useQuery({
     queryKey: ['lci-definitions', selectedParentProduct?.product_id],
@@ -181,34 +225,74 @@ export default function CreateProductDialog({ open, onClose }: CreateProductDial
     },
   })
 
+  // Mutation for adding variant to existing product
+  const createVariantMutation = useMutation({
+    mutationFn: async (data: { identity_id: number; color_code?: string; condition_code?: string; product_id?: number; newName?: string }) => {
+      // If a new name is provided and different, update the family first
+      if (data.newName && data.product_id) {
+        await axiosClient.put(CATALOG.FAMILY(data.product_id), {
+          base_name: data.newName,
+        })
+      }
+      
+      // Only include color_code and condition_code if they have values
+      const payload: { identity_id: number; color_code?: string; condition_code?: string } = {
+        identity_id: data.identity_id,
+      }
+      if (data.color_code) payload.color_code = data.color_code
+      if (data.condition_code) payload.condition_code = data.condition_code
+      
+      const response = await axiosClient.post(CATALOG.VARIANTS, payload)
+      return response.data
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['variants'] })
+      queryClient.invalidateQueries({ queryKey: ['families'] })
+      queryClient.invalidateQueries({ queryKey: ['identities'] })
+      handleClose()
+    },
+    onError: (error: any) => {
+      console.error('Failed to create variant:', error)
+      alert(error.response?.data?.detail || 'Failed to create variant')
+    },
+  })
+
   const createProductMutation = useMutation({
     mutationFn: async (data: any) => {
-      // First create the family
-      const familyResponse = await axiosClient.post(CATALOG.FAMILIES, {
-        base_name: data.name,
-        brand_id: data.brand_id,
-        dimension_length: data.dimension_length,
-        dimension_width: data.dimension_width,
-        dimension_height: data.dimension_height,
-        weight: data.weight,
-        kit_included_products: data.kit_included_products,
-      })
+      let productId: number
+      
+      // For Parts, use the parent product's product_id (don't create a new family)
+      if (data.type === 'P' && data.parent_product_id) {
+        productId = data.parent_product_id
+      } else {
+        // For other types, create a new family
+        const familyResponse = await axiosClient.post(CATALOG.FAMILIES, {
+          base_name: data.name,
+          brand_id: data.brand_id,
+          dimension_length: data.dimension_length,
+          dimension_width: data.dimension_width,
+          dimension_height: data.dimension_height,
+          weight: data.weight,
+          kit_included_products: data.kit_included_products,
+        })
+        productId = familyResponse.data.product_id
+      }
       
       // Then create the identity
       const identityResponse = await axiosClient.post(CATALOG.IDENTITIES, {
-        product_id: familyResponse.data.product_id,
+        product_id: productId,
         type: data.type,
         lci: data.lci,
       })
       
-      // Then create the variant if color/condition provided
-      if (data.color_code || data.condition_code) {
-        await axiosClient.post(CATALOG.VARIANTS, {
-          identity_id: identityResponse.data.id,
-          color_code: data.color_code,
-          condition_code: data.condition_code,
-        })
+      // Always create a variant (even without color/condition for display purposes)
+      const variantPayload: { identity_id: number; color_code?: string; condition_code?: string } = {
+        identity_id: identityResponse.data.id,
       }
+      if (data.color_code) variantPayload.color_code = data.color_code
+      if (data.condition_code) variantPayload.condition_code = data.condition_code
+      
+      await axiosClient.post(CATALOG.VARIANTS, variantPayload)
       
       // If bundle, add components
       if (data.type === 'B' && data.component_ids?.length > 0) {
@@ -230,10 +314,16 @@ export default function CreateProductDialog({ open, onClose }: CreateProductDial
       queryClient.invalidateQueries({ queryKey: ['families'] })
       handleClose()
     },
+    onError: (error: any) => {
+      console.error('Failed to create product:', error)
+      alert(error.response?.data?.detail || 'Failed to create product')
+    },
   })
 
   const handleClose = () => {
     // Reset form
+    setCreationMode('new')
+    setSelectedExistingParent(null)
     setItemType('Product')
     setName('')
     setDimensionLength('')
@@ -251,6 +341,23 @@ export default function CreateProductDialog({ open, onClose }: CreateProductDial
   }
 
   const handleSubmit = () => {
+    // Handle 'existing' mode - just create a new variant for the existing identity
+    if (creationMode === 'existing' && selectedExistingParent) {
+      // Check if name was changed
+      const originalName = selectedExistingParent.family?.base_name || ''
+      const nameChanged = name !== originalName && name.trim() !== ''
+      
+      createVariantMutation.mutate({
+        identity_id: selectedExistingParent.id,
+        color_code: selectedColor?.code,
+        condition_code: selectedCondition?.code,
+        product_id: nameChanged ? selectedExistingParent.product_id : undefined,
+        newName: nameChanged ? name : undefined,
+      })
+      return
+    }
+
+    // Handle 'new' mode - create family, identity, and variant
     const data: any = {
       type: itemType,
       name,
@@ -275,8 +382,10 @@ export default function CreateProductDialog({ open, onClose }: CreateProductDial
       data.kit_included_products = kitIncludedProducts
     }
     
-    if (itemType === 'P') {
+    if (itemType === 'P' && selectedParentProduct) {
       data.lci = selectedLCI?.lci_index
+      // Pass the parent's product_id so we attach to existing family
+      data.parent_product_id = selectedParentProduct.product_id
     }
     
     createProductMutation.mutate(data)
@@ -333,12 +442,76 @@ export default function CreateProductDialog({ open, onClose }: CreateProductDial
     return identity.generated_upis_h?.toLowerCase().includes(query)
   })
 
-  // Filter parent products (only Products, not Parts or Bundles)
-  const parentProductOptions = (identitiesData || []).filter(
-    (identity: ProductIdentity) => identity.type === 'Product'
+  // Filter parent products (only Products, not Parts or Bundles) - use enhanced identities with family data
+  const parentProductOptions = enhancedIdentities.filter(
+    (identity: ProductIdentity & { family?: ProductFamily }) => identity.type === 'Product'
   )
 
-  const isValid = name.trim().length > 0 && (
+  // Handle selecting an existing parent - auto-fill relevant data
+  const handleSelectExistingParent = (parent: (ProductIdentity & { family?: ProductFamily }) | null) => {
+    setSelectedExistingParent(parent)
+    if (parent && parent.family) {
+      // Auto-fill form fields from existing parent
+      setName(parent.family.base_name || '')
+      setDimensionLength(parent.family.dimension_length?.toString() || '')
+      setDimensionWidth(parent.family.dimension_width?.toString() || '')
+      setDimensionHeight(parent.family.dimension_height?.toString() || '')
+      setWeight(parent.family.weight?.toString() || '')
+      setItemType(parent.type as ItemType)
+      // Find and set the brand
+      if (parent.family.brand_id && brandsData) {
+        const brand = brandsData.find((b: Brand) => b.id === parent.family?.brand_id)
+        setSelectedBrand(brand || null)
+      }
+    }
+  }
+
+  // Generate SKU preview based on current form inputs
+  const skuPreview = useMemo(() => {
+    if (creationMode === 'existing' && selectedExistingParent) {
+      // For existing parent, use its UPIS-H as base
+      const parts: string[] = [selectedExistingParent.generated_upis_h || '?????']
+      if (selectedColor?.code) parts.push(selectedColor.code)
+      if (selectedCondition?.code) parts.push(selectedCondition.code)
+      return parts.join('-')
+    } else {
+      // For new product, show placeholder format
+      const typeCode = itemType === 'Product' ? 'P' : itemType
+      
+      // For Parts, use the parent product's ID if selected
+      if (itemType === 'P' && selectedParentProduct) {
+        const parentId = selectedParentProduct.product_id.toString().padStart(5, '0')
+        const parts: string[] = [parentId, 'P']
+        if (selectedLCI) {
+          parts.push(selectedLCI.lci_index.toString().padStart(2, '0'))
+        }
+        if (selectedColor?.code) parts.push(selectedColor.code)
+        if (selectedCondition?.code) parts.push(selectedCondition.code)
+        return parts.join('-')
+      }
+      
+      // For other types, show placeholder
+      const parts: string[] = ['XXXXX'] // Product ID will be generated
+      parts.push(typeCode)
+      if (selectedColor?.code) parts.push(selectedColor.code)
+      if (selectedCondition?.code) parts.push(selectedCondition.code)
+      return parts.join('-')
+    }
+  }, [creationMode, selectedExistingParent, itemType, selectedColor, selectedCondition, selectedLCI, selectedParentProduct])
+
+  // Get existing variants for the selected parent (to show what already exists)
+  const existingVariantsForParent = useMemo(() => {
+    if (!selectedExistingParent || !variantsData) return []
+    return (variantsData as Variant[]).filter(
+      (v) => v.identity_id === selectedExistingParent.id
+    )
+  }, [selectedExistingParent, variantsData])
+
+  const isValid = (
+    creationMode === 'existing' 
+      ? selectedExistingParent !== null
+      : name.trim().length > 0
+  ) && (
     itemType !== 'B' || bundleComponents.length > 0
   ) && (
     itemType !== 'P' || (selectedParentProduct && selectedLCI)
@@ -349,36 +522,141 @@ export default function CreateProductDialog({ open, onClose }: CreateProductDial
       <DialogTitle>Add New Item</DialogTitle>
       <DialogContent>
         <Box sx={{ mt: 2 }}>
-          {/* Type Selection */}
-          <FormControl fullWidth sx={{ mb: 3 }}>
-            <InputLabel>Type *</InputLabel>
-            <Select
-              value={itemType}
-              label="Type *"
-              onChange={(e) => setItemType(e.target.value as ItemType)}
+          {/* Creation Mode Toggle */}
+          <Box sx={{ mb: 3 }}>
+            <Typography variant="subtitle2" sx={{ mb: 1 }}>
+              What would you like to create?
+            </Typography>
+            <ToggleButtonGroup
+              value={creationMode}
+              exclusive
+              onChange={(_, value) => value && setCreationMode(value)}
+              fullWidth
             >
-              {typeOptions.map((option) => (
-                <MenuItem key={option.value} value={option.value}>
-                  <Box>
-                    <Typography variant="body1">{option.label}</Typography>
-                    <Typography variant="caption" color="text.secondary">
-                      {option.description}
-                    </Typography>
-                  </Box>
-                </MenuItem>
-              ))}
-            </Select>
-          </FormControl>
+              <ToggleButton value="new">
+                <AddCircle sx={{ mr: 1 }} />
+                New Product
+              </ToggleButton>
+              <ToggleButton value="existing">
+                <ContentCopy sx={{ mr: 1 }} />
+                Variant for Existing Product
+              </ToggleButton>
+            </ToggleButtonGroup>
+          </Box>
 
           <Divider sx={{ mb: 3 }} />
 
-          {/* Common Fields */}
-          <Typography variant="subtitle2" sx={{ mb: 2 }}>
-            Basic Information
-          </Typography>
-          
-          <TextField
-            fullWidth
+          {/* Existing Parent Selection (only in 'existing' mode) */}
+          {creationMode === 'existing' && (
+            <Box sx={{ mb: 3 }}>
+              <Typography variant="subtitle2" sx={{ mb: 1 }}>
+                Select Existing Parent Product *
+              </Typography>
+              <Autocomplete
+                options={enhancedIdentities.filter((i: any) => i.type === 'Product' || i.type === 'K')}
+                getOptionLabel={(option: any) =>
+                  `${option.generated_upis_h} - ${option.family?.base_name || 'Unknown'}`
+                }
+                value={selectedExistingParent}
+                onChange={(_, value) => handleSelectExistingParent(value)}
+                renderInput={(params) => (
+                  <TextField
+                    {...params}
+                    placeholder="Search by UPIS-H or product name..."
+                    InputProps={{
+                      ...params.InputProps,
+                      startAdornment: (
+                        <InputAdornment position="start">
+                          <Search />
+                        </InputAdornment>
+                      ),
+                    }}
+                  />
+                )}
+                renderOption={(props, option: any) => (
+                  <li {...props} key={option.id}>
+                    <Box>
+                      <Typography variant="body2" fontFamily="monospace">
+                        {option.generated_upis_h}
+                      </Typography>
+                      <Typography variant="caption" color="text.secondary">
+                        {option.family?.base_name || 'Unknown'}
+                        {option.family?.brand?.name && ` • ${option.family.brand.name}`}
+                      </Typography>
+                    </Box>
+                  </li>
+                )}
+              />
+              {selectedExistingParent && existingVariantsForParent.length > 0 && (
+                <Alert severity="info" sx={{ mt: 2 }}>
+                  <Typography variant="body2">
+                    Existing variants for this product:
+                  </Typography>
+                  <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5, mt: 1 }}>
+                    {existingVariantsForParent.map((v: Variant) => (
+                      <Chip
+                        key={v.id}
+                        size="small"
+                        label={`${v.color_code || '-'}/${v.condition_code || '-'}`}
+                        variant="outlined"
+                      />
+                    ))}
+                  </Box>
+                </Alert>
+              )}
+
+              {/* Variant Name - editable for customization */}
+              {selectedExistingParent && (
+                <Box sx={{ mt: 2 }}>
+                  <TextField
+                    fullWidth
+                    label="Variant Name"
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    placeholder="Customize the name for this variant..."
+                    helperText="Leave as-is or edit to update the product name"
+                  />
+                </Box>
+              )}
+
+              <Divider sx={{ mt: 3, mb: 3 }} />
+            </Box>
+          )}
+
+          {/* Type Selection - only for new products */}
+          {creationMode === 'new' && (
+            <FormControl fullWidth sx={{ mb: 3 }}>
+              <InputLabel>Type *</InputLabel>
+              <Select
+                value={itemType}
+                label="Type *"
+                onChange={(e) => setItemType(e.target.value as ItemType)}
+              >
+                {typeOptions.map((option) => (
+                  <MenuItem key={option.value} value={option.value}>
+                    <Box>
+                      <Typography variant="body1">{option.label}</Typography>
+                      <Typography variant="caption" color="text.secondary">
+                        {option.description}
+                      </Typography>
+                    </Box>
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+          )}
+
+          {creationMode === 'new' && <Divider sx={{ mb: 3 }} />}
+
+          {/* Common Fields - Only show for new products or when editing */}
+          {creationMode === 'new' && (
+            <>
+              <Typography variant="subtitle2" sx={{ mb: 2 }}>
+                Basic Information
+              </Typography>
+              
+              <TextField
+                fullWidth
             label="Name *"
             value={name}
             onChange={(e) => setName(e.target.value)}
@@ -485,9 +763,11 @@ export default function CreateProductDialog({ open, onClose }: CreateProductDial
           />
 
           <Divider sx={{ mb: 3 }} />
+            </>
+          )}
 
-          {/* Color & Condition - Not for Bundles */}
-          {itemType !== 'B' && (
+          {/* Color & Condition - Not for Bundles, shown in both new and existing modes */}
+          {(creationMode === 'new' ? itemType !== 'B' : true) && (
             <>
               <Typography variant="subtitle2" sx={{ mb: 2 }}>
                 Variant Options
@@ -591,8 +871,8 @@ export default function CreateProductDialog({ open, onClose }: CreateProductDial
             </>
           )}
 
-          {/* Bundle-specific: Component SKUs */}
-          {itemType === 'B' && (
+          {/* Bundle-specific: Component SKUs - only for new products */}
+          {creationMode === 'new' && itemType === 'B' && (
             <>
               <Typography variant="subtitle2" sx={{ mb: 2 }}>
                 Bundle Components *
@@ -658,8 +938,8 @@ export default function CreateProductDialog({ open, onClose }: CreateProductDial
             </>
           )}
 
-          {/* Kit-specific: Included Products */}
-          {itemType === 'K' && (
+          {/* Kit-specific: Included Products - only for new products */}
+          {creationMode === 'new' && itemType === 'K' && (
             <>
               <Typography variant="subtitle2" sx={{ mb: 2 }}>
                 Included Products
@@ -681,8 +961,8 @@ export default function CreateProductDialog({ open, onClose }: CreateProductDial
             </>
           )}
 
-          {/* Part-specific: Parent SKU and LCI */}
-          {itemType === 'P' && (
+          {/* Part-specific: Parent SKU and LCI - only for new products */}
+          {creationMode === 'new' && itemType === 'P' && (
             <>
               <Typography variant="subtitle2" sx={{ mb: 2 }}>
                 Part Configuration *
@@ -691,8 +971,8 @@ export default function CreateProductDialog({ open, onClose }: CreateProductDial
               {/* Parent Product */}
               <Autocomplete
                 options={parentProductOptions}
-                getOptionLabel={(option: ProductIdentity) => 
-                  `${option.generated_upis_h} - ${option.product_id}`
+                getOptionLabel={(option: ProductIdentity & { family?: ProductFamily }) => 
+                  `${option.generated_upis_h} - ${option.family?.base_name || 'Unknown'}`
                 }
                 value={selectedParentProduct}
                 onChange={(_, value) => {
@@ -703,13 +983,19 @@ export default function CreateProductDialog({ open, onClose }: CreateProductDial
                   <TextField
                     {...params}
                     label="Parent Product *"
-                    placeholder="Select the parent product this part belongs to..."
+                    placeholder="Search by UPIS-H or product name..."
                   />
                 )}
-                renderOption={(props, option) => (
+                renderOption={(props, option: ProductIdentity & { family?: ProductFamily }) => (
                   <li {...props} key={option.id}>
                     <Box>
-                      <Typography variant="body2">{option.generated_upis_h}</Typography>
+                      <Typography variant="body2" fontFamily="monospace">
+                        {option.generated_upis_h}
+                      </Typography>
+                      <Typography variant="caption" color="text.secondary">
+                        {option.family?.base_name || 'Unknown'}
+                        {option.family?.brand?.name && ` • ${option.family.brand.name}`}
+                      </Typography>
                     </Box>
                   </li>
                 )}
@@ -719,7 +1005,7 @@ export default function CreateProductDialog({ open, onClose }: CreateProductDial
               {selectedParentProduct && (
                 <>
                   <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-                    Parent Name: {selectedParentProduct.product_id}
+                    Parent: {(selectedParentProduct as any).family?.base_name || selectedParentProduct.product_id}
                   </Typography>
                   
                   {/* LCI Selection */}
@@ -773,15 +1059,21 @@ export default function CreateProductDialog({ open, onClose }: CreateProductDial
             </>
           )}
 
-          {/* SKU Preview */}
-          <Box sx={{ bgcolor: 'grey.100', p: 2, borderRadius: 1 }}>
-            <Typography variant="subtitle2" sx={{ mb: 1 }}>
+          {/* SKU Preview - Always shown */}
+          <Paper elevation={0} sx={{ bgcolor: 'primary.50', p: 2, borderRadius: 1, border: '1px solid', borderColor: 'primary.200' }}>
+            <Typography variant="subtitle2" sx={{ mb: 1, color: 'primary.main' }}>
               SKU Preview
             </Typography>
-            <Typography variant="body2" color="text.secondary">
-              SKU will be auto-generated based on the input fields. Format: {'{product_id}-{type}-{lci}-{color}-{condition}'}
+            <Typography variant="h6" fontFamily="monospace" sx={{ mb: 1 }}>
+              {skuPreview}
             </Typography>
-          </Box>
+            <Typography variant="caption" color="text.secondary">
+              {creationMode === 'existing' 
+                ? 'Based on selected parent product. Choose color/condition to complete the variant SKU.'
+                : 'SKU will be auto-generated when product is created. The XXXXX will be replaced with the actual product ID.'
+              }
+            </Typography>
+          </Paper>
         </Box>
       </DialogContent>
       <DialogActions>
@@ -789,9 +1081,15 @@ export default function CreateProductDialog({ open, onClose }: CreateProductDial
         <Button
           variant="contained"
           onClick={handleSubmit}
-          disabled={!isValid || createProductMutation.isPending}
+          disabled={!isValid || createProductMutation.isPending || createVariantMutation.isPending}
         >
-          {createProductMutation.isPending ? <CircularProgress size={24} /> : 'Create'}
+          {(createProductMutation.isPending || createVariantMutation.isPending) ? (
+            <CircularProgress size={24} />
+          ) : creationMode === 'existing' ? (
+            'Add Variant'
+          ) : (
+            'Create'
+          )}
         </Button>
       </DialogActions>
     </Dialog>
