@@ -24,6 +24,14 @@ class ProductFamilyRepository(BaseRepository[ProductFamily]):
     def __init__(self, session: AsyncSession):
         super().__init__(ProductFamily, session)
     
+    async def get_max_product_id(self) -> Optional[int]:
+        """Get the maximum product_id currently in use."""
+        from sqlalchemy import func
+        
+        stmt = select(func.max(ProductFamily.product_id))
+        result = await self.session.execute(stmt)
+        return result.scalar_one_or_none()
+    
     async def get_with_identities(self, product_id: int) -> Optional[ProductFamily]:
         """Get a ProductFamily with all its identities loaded."""
         stmt = (
@@ -108,7 +116,7 @@ class ProductIdentityRepository(BaseRepository[ProductIdentity]):
         """Generate UPIS-H string from identity components."""
         product_id_str = f"{product_id:05d}"
         
-        if identity_type == IdentityType.BASE:
+        if identity_type == IdentityType.PRODUCT:
             return product_id_str
         elif identity_type == IdentityType.P and lci is not None:
             return f"{product_id_str}-{identity_type.value}-{lci}"

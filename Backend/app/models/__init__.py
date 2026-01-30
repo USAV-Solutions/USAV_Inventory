@@ -2,12 +2,16 @@
 try:
     from app.models.entities import (
         Base,
+        Brand,
         BundleComponent,
         BundleRole,
+        Color,
+        Condition,
         ConditionCode,
         IdentityType,
         InventoryItem,
         InventoryStatus,
+        LCIDefinition,
         PhysicalClass,
         Platform,
         PlatformListing,
@@ -40,6 +44,11 @@ __all__ = [
     "BundleRole",
     "Platform",
     "UserRole",
+    # Lookup Models
+    "Brand",
+    "Color",
+    "Condition",
+    "LCIDefinition",
     # Models
     "ProductFamily",
     "ProductIdentity",

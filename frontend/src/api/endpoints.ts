@@ -20,4 +20,18 @@ export const CATALOG = {
   IDENTITY: (id: number) => `/identities/${id}`,
   VARIANTS: '/variants',
   VARIANT: (id: number) => `/variants/${id}`,
+  BUNDLES: '/bundles',
+  BUNDLE: (id: number) => `/bundles/${id}`,
+}
+
+// Lookup endpoints
+export const LOOKUPS = {
+  BRANDS: '/brands',
+  BRAND: (id: number) => `/brands/${id}`,
+  COLORS: '/colors',
+  COLOR: (id: number) => `/colors/${id}`,
+  CONDITIONS: '/conditions',
+  CONDITION: (id: number) => `/conditions/${id}`,
+  LCI_DEFINITIONS: '/lci-definitions',
+  LCI_DEFINITION: (id: number) => `/lci-definitions/${id}`,
 }

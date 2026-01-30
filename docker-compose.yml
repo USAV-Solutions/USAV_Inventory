@@ -24,13 +24,15 @@ services:
       - usav_network
 
   # ==========================================================================
-  # FastAPI Backend
+  # FastAPI Backend (Production)
   # ==========================================================================
   backend:
     build:
       context: ./Backend
       dockerfile: Dockerfile
     container_name: usav_backend
+    profiles:
+      - prod
     restart: unless-stopped
     environment:
       - DEBUG=${DEBUG:-false}
@@ -45,12 +47,12 @@ services:
       - ZOHO_REFRESH_TOKEN=${ZOHO_REFRESH_TOKEN:-}
       - ZOHO_ORGANIZATION_ID=${ZOHO_ORGANIZATION_ID:-}
     ports:
-      - "8000:8000"
+      - "8080:8080"
     depends_on:
       db:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -68,7 +70,7 @@ services:
     container_name: usav_backend_dev
     profiles:
       - dev
-    command: uvicorn app.main:app --host 0.0.0.0 -                                      
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8080 --reload
     volumes:
       - ./Backend:/app
     environment:
@@ -80,10 +82,16 @@ services:
       - DB_PASS=${DB_PASS:-devpassword123}
       - DB_NAME=${DB_NAME:-inventory_system}
     ports:
-      - "8000:8000"
+      - "8080:8080"
     depends_on:
       db:
         condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
     networks:
       - usav_network
 
@@ -136,21 +144,23 @@ services:
       - usav_network
 
   # ==========================================================================
-  # React Frontend
+  # React Frontend (Production)
   # ==========================================================================
   frontend:
     build:
       context: ./frontend
       dockerfile: Dockerfile
     container_name: usav_frontend
+    profiles:
+      - prod
     restart: unless-stopped
     ports:
-      - "3000:3000"
+      - "3636:3636"
     depends_on:
       backend:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:3000"]
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:3636"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -168,7 +178,7 @@ services:
     container_name: usav_frontend_dev
     profiles:
       - dev
-    command: npm run dev -- --host 0.0.0.0
+    command: npm run dev -- --host 0.0.0.0 --port 3636
     volumes:
       - ./frontend/src:/app/src
       - ./frontend/index.html:/app/index.html
@@ -176,9 +186,9 @@ services:
       - ./frontend/tsconfig.json:/app/tsconfig.json
       - ./frontend/tsconfig.node.json:/app/tsconfig.node.json
     ports:
-      - "3000:3000"
+      - "3636:3636"
     depends_on:
-      backend:
+      backend-dev:
         condition: service_healthy
     networks:
       - usav_network

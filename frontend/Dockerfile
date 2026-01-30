@@ -16,23 +16,21 @@ COPY . .
 # If TypeScript errors occur, use vite build directly (skip tsc check)
 RUN npm run build || npm run build:no-check
 
-# Production stage
-FROM node:20-alpine
+# Production stage - use nginx for static files + reverse proxy
+FROM nginx:alpine
 
-WORKDIR /app
+# Copy built files to nginx html directory
+COPY --from=builder /app/dist /usr/share/nginx/html
 
-# Install serve to serve the built files
-RUN npm install -g serve
-
-# Copy built files from builder
-COPY --from=builder /app/dist ./dist
+# Copy nginx configuration
+COPY nginx.conf /etc/nginx/conf.d/default.conf
 
 # Expose port
-EXPOSE 3000
+EXPOSE 3636
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-  CMD wget --quiet --tries=1 --spider http://localhost:3000 || exit 1
+  CMD wget --quiet --tries=1 --spider http://localhost:3636 || exit 1
 
-# Serve the application on all interfaces
-CMD ["serve", "-s", "dist", "-l", "3000"]
+# Start nginx
+CMD ["nginx", "-g", "daemon off;"]

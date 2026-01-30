@@ -37,11 +37,10 @@ if TYPE_CHECKING:
 
 class IdentityType(str, enum.Enum):
     """Product identity types as defined in SKU spec."""
-    BASE = "Base"   # Base product
-    B = "B"         # Bundle
-    P = "P"         # Part
-    K = "K"         # Kit
-    S = "S"         # Service
+    PRODUCT = "Product"  # Standard product
+    B = "B"              # Bundle
+    P = "P"              # Part
+    K = "K"              # Kit
 
 
 class PhysicalClass(str, enum.Enum):
@@ -121,6 +120,139 @@ class TimestampMixin:
 
 
 # ============================================================================
+# LOOKUP TABLES
+# ============================================================================
+
+class Brand(Base, TimestampMixin):
+    """
+    Brand/Manufacturer lookup table.
+    Allows users to manage a list of brands for products.
+    """
+    __tablename__ = "brand"
+    
+    id: Mapped[int] = mapped_column(
+        BigInteger,
+        primary_key=True,
+        autoincrement=True,
+    )
+    name: Mapped[str] = mapped_column(
+        String(100),
+        nullable=False,
+        unique=True,
+        comment="Brand name (e.g., 'Bose', 'USAV Solutions').",
+    )
+    
+    def __repr__(self) -> str:
+        return f"<Brand(id={self.id}, name='{self.name}')>"
+
+
+class Color(Base, TimestampMixin):
+    """
+    Color lookup table.
+    Stores color names with their associated codes.
+    """
+    __tablename__ = "color"
+    
+    id: Mapped[int] = mapped_column(
+        BigInteger,
+        primary_key=True,
+        autoincrement=True,
+    )
+    name: Mapped[str] = mapped_column(
+        String(50),
+        nullable=False,
+        comment="Color name (e.g., 'Black', 'White').",
+    )
+    code: Mapped[str] = mapped_column(
+        String(2),
+        nullable=False,
+        unique=True,
+        comment="Color code (e.g., 'BK', 'WY').",
+    )
+    
+    __table_args__ = (
+        UniqueConstraint("name", name="uq_color_name"),
+    )
+    
+    def __repr__(self) -> str:
+        return f"<Color(id={self.id}, name='{self.name}', code='{self.code}')>"
+
+
+class Condition(Base, TimestampMixin):
+    """
+    Condition lookup table.
+    Stores condition names with their associated codes.
+    """
+    __tablename__ = "condition"
+    
+    id: Mapped[int] = mapped_column(
+        BigInteger,
+        primary_key=True,
+        autoincrement=True,
+    )
+    name: Mapped[str] = mapped_column(
+        String(50),
+        nullable=False,
+        comment="Condition name (e.g., 'Used', 'New').",
+    )
+    code: Mapped[str] = mapped_column(
+        String(1),
+        nullable=False,
+        unique=True,
+        comment="Condition code (e.g., 'U', 'N').",
+    )
+    
+    __table_args__ = (
+        UniqueConstraint("name", name="uq_condition_name"),
+    )
+    
+    def __repr__(self) -> str:
+        return f"<Condition(id={self.id}, name='{self.name}', code='{self.code}')>"
+
+
+class LCIDefinition(Base, TimestampMixin):
+    """
+    Local Component Index (LCI) definition table.
+    Maps LCI numbers to component names for each product family.
+    """
+    __tablename__ = "lci_definition"
+    
+    id: Mapped[int] = mapped_column(
+        BigInteger,
+        primary_key=True,
+        autoincrement=True,
+    )
+    product_id: Mapped[int] = mapped_column(
+        Integer,
+        ForeignKey("product_family.product_id", ondelete="CASCADE"),
+        nullable=False,
+        comment="Links to Product Family.",
+    )
+    lci_index: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False,
+        comment="LCI number (1-99).",
+    )
+    component_name: Mapped[str] = mapped_column(
+        String(100),
+        nullable=False,
+        comment="Component name (e.g., 'Motherboard', 'Power Supply').",
+    )
+    
+    __table_args__ = (
+        UniqueConstraint("product_id", "lci_index", name="uq_lci_product_index"),
+        CheckConstraint(
+            "lci_index >= 1 AND lci_index <= 99",
+            name="ck_lci_index_range",
+        ),
+        Index("ix_lci_product_id", "product_id"),
+    )
+    
+    def __repr__(self) -> str:
+        return f"<LCIDefinition(product_id={self.product_id}, lci={self.lci_index}, name='{self.component_name}')>"
+
+
+# ============================================================================
 # CORE PRODUCT TABLES
 # ============================================================================
 
@@ -146,11 +278,52 @@ class ProductFamily(Base, TimestampMixin):
         nullable=True,
         comment="Optional detailed description.",
     )
+    brand_id: Mapped[Optional[int]] = mapped_column(
+        BigInteger,
+        ForeignKey("brand.id", ondelete="SET NULL"),
+        nullable=True,
+        comment="Links to Brand.",
+    )
+    dimension_length: Mapped[Optional[Decimal]] = mapped_column(
+        Numeric(10, 2),
+        nullable=True,
+        comment="Product length in inches.",
+    )
+    dimension_width: Mapped[Optional[Decimal]] = mapped_column(
+        Numeric(10, 2),
+        nullable=True,
+        comment="Product width in inches.",
+    )
+    dimension_height: Mapped[Optional[Decimal]] = mapped_column(
+        Numeric(10, 2),
+        nullable=True,
+        comment="Product height in inches.",
+    )
+    weight: Mapped[Optional[Decimal]] = mapped_column(
+        Numeric(10, 2),
+        nullable=True,
+        comment="Product weight in pounds.",
+    )
+    kit_included_products: Mapped[Optional[str]] = mapped_column(
+        Text,
+        nullable=True,
+        comment="Comma-separated list of included products for Kit type.",
+    )
     
     # Relationships
+    brand: Mapped[Optional["Brand"]] = relationship(
+        "Brand",
+        lazy="selectin",
+    )
     identities: Mapped["List[ProductIdentity]"] = relationship(
         "ProductIdentity",
         back_populates="family",
+        cascade="all, delete-orphan",
+        lazy="selectin",
+    )
+    lci_definitions: Mapped["List[LCIDefinition]"] = relationship(
+        "LCIDefinition",
+        backref="family",
         cascade="all, delete-orphan",
         lazy="selectin",
     )
@@ -160,6 +333,7 @@ class ProductFamily(Base, TimestampMixin):
             "product_id >= 0 AND product_id <= 99999",
             name="ck_product_family_id_range",
         ),
+        Index("ix_product_family_brand", "brand_id"),
     )
     
     def __repr__(self) -> str:
@@ -186,9 +360,9 @@ class ProductIdentity(Base, TimestampMixin):
         comment="Links to Family.",
     )
     type: Mapped[IdentityType] = mapped_column(
-        Enum(IdentityType, name="identity_type_enum"),
+        Enum(IdentityType, name="identity_type_enum", values_callable=lambda obj: [e.value for e in obj]),
         nullable=False,
-        comment="B (Bundle), P (Part), K (Kit), S (Service), Base (Product).",
+        comment="Product (standard), B (Bundle), P (Part), K (Kit).",
     )
     lci: Mapped[Optional[int]] = mapped_column(
         Integer,

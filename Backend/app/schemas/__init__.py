@@ -45,6 +45,20 @@ from app.schemas.listings import (
     PlatformListingResponse,
     PlatformListingUpdate,
 )
+from app.schemas.lookups import (
+    BrandCreate,
+    BrandResponse,
+    BrandUpdate,
+    ColorCreate,
+    ColorResponse,
+    ColorUpdate,
+    ConditionCreate,
+    ConditionResponse,
+    ConditionUpdate,
+    LCIDefinitionCreate,
+    LCIDefinitionResponse,
+    LCIDefinitionUpdate,
+)
 from app.schemas.pagination import PaginatedResponse
 from app.schemas.variants import (
     ProductVariantCreate,
@@ -92,6 +106,19 @@ __all__ = [
     "PlatformListingCreate",
     "PlatformListingResponse",
     "PlatformListingUpdate",
+    # Lookups
+    "BrandCreate",
+    "BrandResponse",
+    "BrandUpdate",
+    "ColorCreate",
+    "ColorResponse",
+    "ColorUpdate",
+    "ConditionCreate",
+    "ConditionResponse",
+    "ConditionUpdate",
+    "LCIDefinitionCreate",
+    "LCIDefinitionResponse",
+    "LCIDefinitionUpdate",
     # Pagination
     "PaginatedResponse",
     # Variants

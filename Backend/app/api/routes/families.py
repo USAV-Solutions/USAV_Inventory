@@ -53,15 +53,25 @@ async def create_family(
     """Create a new product family."""
     repo = ProductFamilyRepository(db)
     
+    # Auto-generate product_id if not provided
+    product_id = data.product_id
+    if product_id is None:
+        # Find the next available product_id
+        max_id = await repo.get_max_product_id()
+        product_id = (max_id or 0) + 1
+    
     # Check if product_id already exists
-    existing = await repo.get(data.product_id)
+    existing = await repo.get(product_id)
     if existing:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail=f"Product family with ID {data.product_id} already exists"
+            detail=f"Product family with ID {product_id} already exists"
         )
     
-    family = await repo.create(data.model_dump())
+    # Create with the determined product_id
+    create_data = data.model_dump()
+    create_data['product_id'] = product_id
+    family = await repo.create(create_data)
     return ProductFamilyResponse.model_validate(family)
 
 

@@ -4,8 +4,7 @@ import Login from './pages/Login'
 import Dashboard from './pages/Dashboard'
 import WarehouseOps from './pages/WarehouseOps'
 import StockLookup from './pages/StockLookup'
-import ProductIdentities from './pages/ProductIdentities'
-import VariantManager from './pages/VariantManager'
+import InventoryManagement from './pages/InventoryManagement'
 import Layout from './components/common/Layout'
 import RoleGuard from './components/guards/RoleGuard'
 
@@ -38,8 +37,7 @@ function App() {
 
         {/* Catalog Routes */}
         <Route element={<RoleGuard allowedRoles={['ADMIN', 'SALES_REP']} />}>
-          <Route path="/catalog/identities" element={<ProductIdentities />} />
-          <Route path="/catalog/variants" element={<VariantManager />} />
+          <Route path="/catalog/inventory" element={<InventoryManagement />} />
         </Route>
       </Route>
 

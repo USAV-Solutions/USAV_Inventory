@@ -22,7 +22,6 @@ import {
   Dashboard,
   QrCodeScanner,
   Search,
-  Category,
   Inventory,
   Logout,
   Person,
@@ -42,8 +41,7 @@ const navItems: NavItem[] = [
   { title: 'Dashboard', path: '/', icon: <Dashboard />, roles: ['ADMIN', 'WAREHOUSE_OP', 'SALES_REP'] },
   { title: 'Scan Tool', path: '/warehouse/ops', icon: <QrCodeScanner />, roles: ['ADMIN', 'WAREHOUSE_OP'] },
   { title: 'Stock Lookup', path: '/warehouse/lookup', icon: <Search />, roles: ['ADMIN', 'WAREHOUSE_OP'] },
-  { title: 'Product Identities', path: '/catalog/identities', icon: <Category />, roles: ['ADMIN', 'SALES_REP'] },
-  { title: 'Variant Manager', path: '/catalog/variants', icon: <Inventory />, roles: ['ADMIN', 'SALES_REP'] },
+  { title: 'Inventory Management', path: '/catalog/inventory', icon: <Inventory />, roles: ['ADMIN', 'SALES_REP'] },
 ]
 
 export default function Layout() {

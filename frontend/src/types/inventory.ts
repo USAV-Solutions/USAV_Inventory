@@ -1,27 +1,83 @@
 export type ZohoSyncStatus = 'SYNCED' | 'PENDING' | 'ERROR' | 'DIRTY'
-export type ProductType = 'P' | 'B' | 'K'
+export type ProductType = 'Product' | 'P' | 'B' | 'K'
 export type ItemCondition = 'NEW' | 'REFURBISHED' | 'USED'
 export type ItemStatus = 'IN_STOCK' | 'SOLD' | 'RESERVED' | 'DAMAGED'
 
+// Lookup Types
+export interface Brand {
+  id: number
+  name: string
+  created_at: string
+  updated_at: string
+}
+
+export interface Color {
+  id: number
+  name: string
+  code: string
+  created_at: string
+  updated_at: string
+}
+
+export interface Condition {
+  id: number
+  name: string
+  code: string
+  created_at: string
+  updated_at: string
+}
+
+export interface LCIDefinition {
+  id: number
+  product_id: number
+  lci_index: number
+  component_name: string
+  created_at: string
+  updated_at: string
+}
+
+// Product Types
+export interface ProductFamily {
+  product_id: number
+  base_name: string
+  description?: string
+  brand_id?: number
+  brand?: Brand
+  dimension_length?: number
+  dimension_width?: number
+  dimension_height?: number
+  weight?: number
+  kit_included_products?: string
+  created_at: string
+  updated_at: string
+}
+
 export interface ProductIdentity {
   id: number
+  product_id: number
   type: ProductType
-  lci?: string
-  upis_h: string
+  lci?: number
+  generated_upis_h: string
   hex_signature: string
+  physical_class?: string
   created_at: string
+  updated_at: string
+  family?: ProductFamily
 }
 
 export interface Variant {
   id: number
   identity_id: number
   full_sku: string
-  condition: ItemCondition
-  price: number
-  zoho_status: ZohoSyncStatus
+  color_code?: string
+  condition_code?: string
+  zoho_sync_status: ZohoSyncStatus
+  zoho_item_id?: string
   zoho_error?: string
+  is_active: boolean
   created_at: string
   updated_at: string
+  identity?: ProductIdentity
 }
 
 export interface InventoryItem {
@@ -30,6 +86,7 @@ export interface InventoryItem {
   variant_id: number
   location_code: string
   status: ItemStatus
+  cost_basis?: number
   received_at: string
   updated_at: string
 }
@@ -38,4 +95,55 @@ export interface InventoryAudit {
   sku: string
   items: InventoryItem[]
   total_count: number
+}
+
+// Extended types for the inventory management page
+export interface InventoryListItem {
+  id: number
+  full_sku: string
+  name: string
+  type: ProductType
+  color_code?: string
+  condition_code?: string
+  parent_upis_h: string
+  brand?: string
+  zoho_sync_status: ZohoSyncStatus
+  is_active: boolean
+}
+
+export interface GroupedInventoryItem {
+  parent_upis_h: string
+  name: string
+  type: ProductType
+  brand?: string
+  alias_count: number
+  variants: InventoryListItem[]
+}
+
+// Create product form types
+export interface CreateProductFormData {
+  type: ProductType
+  name: string
+  dimension_length?: number
+  dimension_width?: number
+  dimension_height?: number
+  weight?: number
+  brand_id?: number
+  color_id?: number
+  condition_id?: number
+  // Bundle-specific
+  component_skus?: string[]
+  // Kit-specific
+  included_products?: string
+  // Part-specific
+  parent_product_id?: number
+  lci_id?: number
+}
+
+// Bundle component
+export interface BundleComponent {
+  parent_identity_id: number
+  child_identity_id: number
+  quantity_required: number
+  role: 'Primary' | 'Accessory' | 'Satellite'
 }
