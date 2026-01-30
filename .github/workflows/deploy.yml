@@ -1,0 +1,29 @@
+name: Deploy to Proxmox
+
+on:
+  push:
+    branches: [ "main" ]
+
+jobs:
+  deploy:
+    # This tells GitHub to run strictly on YOUR server
+    runs-on: self-hosted
+
+    steps:
+      - name: Update and Restart Containers
+        run: |
+          # 1. Go to your existing project folder
+          cd ~/usav-inventory/USAV_Inventory
+          
+          # 2. Pull the latest code
+          git pull origin main
+          
+          # 3. Rebuild and Restart (Production Profile)
+          # Note: We use full path to docker just in case, but usually 'docker' works
+          docker compose --profile prod up -d --build
+          
+          # 4. Run Migrations
+          docker compose --profile migrate run migrations
+          
+          # 5. Cleanup space
+          docker image prune -f
