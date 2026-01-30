@@ -13,7 +13,7 @@ jobs:
       - name: Update and Restart Containers
         run: |
           # 1. Go to your existing project folder
-          cd ~/usav-inventory/USAV_Inventory
+          cd ~/USAV_Inventory
           
           # 2. Pull the latest code
           git pull origin main
