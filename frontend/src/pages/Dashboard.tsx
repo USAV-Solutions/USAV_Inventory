@@ -1,9 +1,11 @@
-import { Box, Grid, Card, CardContent, Typography, Button } from '@mui/material'
+import { Box, Grid, Card, CardContent, Typography, Paper, Chip, Divider } from '@mui/material'
 import {
   QrCodeScanner,
   Search,
-  Category,
   Inventory,
+  Storefront,
+  People,
+  TrendingUp,
 } from '@mui/icons-material'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../hooks/useAuth'
@@ -22,7 +24,7 @@ const quickActions: QuickAction[] = [
     title: 'Scan Tool',
     description: 'Receive, move, or audit inventory items',
     path: '/warehouse/ops',
-    icon: <QrCodeScanner sx={{ fontSize: 48 }} />,
+    icon: <QrCodeScanner sx={{ fontSize: 40 }} />,
     color: '#1976d2',
     roles: ['ADMIN', 'WAREHOUSE_OP'],
   },
@@ -30,25 +32,33 @@ const quickActions: QuickAction[] = [
     title: 'Stock Lookup',
     description: 'Search inventory by SKU or serial number',
     path: '/warehouse/lookup',
-    icon: <Search sx={{ fontSize: 48 }} />,
+    icon: <Search sx={{ fontSize: 40 }} />,
     color: '#2e7d32',
     roles: ['ADMIN', 'WAREHOUSE_OP'],
   },
   {
-    title: 'Product Identities',
-    description: 'Manage product families and identities',
-    path: '/catalog/identities',
-    icon: <Category sx={{ fontSize: 48 }} />,
+    title: 'Inventory Management',
+    description: 'Manage products, variants and stock',
+    path: '/catalog/inventory',
+    icon: <Inventory sx={{ fontSize: 40 }} />,
     color: '#ed6c02',
     roles: ['ADMIN', 'SALES_REP'],
   },
   {
-    title: 'Variant Manager',
-    description: 'Manage variants and Zoho sync status',
-    path: '/catalog/variants',
-    icon: <Inventory sx={{ fontSize: 48 }} />,
+    title: 'Product Listings',
+    description: 'View and manage marketplace listings',
+    path: '/catalog/listings',
+    icon: <Storefront sx={{ fontSize: 40 }} />,
     color: '#9c27b0',
     roles: ['ADMIN', 'SALES_REP'],
+  },
+  {
+    title: 'User Management',
+    description: 'Manage users, roles and permissions',
+    path: '/admin/users',
+    icon: <People sx={{ fontSize: 40 }} />,
+    color: '#d32f2f',
+    roles: ['ADMIN'],
   },
 ]
 
@@ -60,29 +70,81 @@ export default function Dashboard() {
     hasRole(action.roles)
   )
 
+  const getRoleColor = (role: string): 'primary' | 'secondary' | 'success' | 'warning' | 'error' => {
+    switch (role) {
+      case 'ADMIN': return 'error'
+      case 'WAREHOUSE_OP': return 'primary'
+      case 'SALES_REP': return 'success'
+      default: return 'secondary'
+    }
+  }
+
+  const getRoleLabel = (role: string): string => {
+    switch (role) {
+      case 'ADMIN': return 'Administrator'
+      case 'WAREHOUSE_OP': return 'Warehouse Operator'
+      case 'SALES_REP': return 'Sales Representative'
+      default: return role
+    }
+  }
+
   return (
     <Box>
-      <Typography variant="h4" gutterBottom>
-        Welcome, {user?.username}!
-      </Typography>
-      <Typography variant="body1" color="text.secondary" sx={{ mb: 4 }}>
-        Role: {user?.role}
-      </Typography>
+      {/* Welcome Section */}
+      <Paper 
+        sx={{ 
+          p: 3, 
+          mb: 4, 
+          background: 'linear-gradient(135deg, #1976d2 0%, #1565c0 100%)',
+          color: 'white',
+          borderRadius: 2,
+        }}
+      >
+        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 2 }}>
+          <Box>
+            <Typography variant="h4" fontWeight="bold" gutterBottom>
+              Welcome back, {user?.username}!
+            </Typography>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+              <Chip 
+                label={getRoleLabel(user?.role || '')} 
+                color={getRoleColor(user?.role || '')}
+                size="small"
+                sx={{ fontWeight: 'medium' }}
+              />
+            </Box>
+          </Box>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <TrendingUp sx={{ fontSize: 32 }} />
+            <Typography variant="body2" sx={{ opacity: 0.9 }}>
+              USAV Inventory System
+            </Typography>
+          </Box>
+        </Box>
+      </Paper>
 
-      <Typography variant="h6" gutterBottom>
-        Quick Actions
-      </Typography>
+      {/* Quick Actions Section */}
+      <Box sx={{ mb: 2 }}>
+        <Typography variant="h5" fontWeight="medium" gutterBottom>
+          Quick Actions
+        </Typography>
+        <Divider sx={{ mb: 3 }} />
+      </Box>
+      
       <Grid container spacing={3}>
         {filteredActions.map((action) => (
-          <Grid item xs={12} sm={6} md={3} key={action.path}>
+          <Grid item xs={12} sm={6} md={4} lg={3} key={action.path}>
             <Card
               sx={{
                 height: '100%',
                 cursor: 'pointer',
-                transition: 'transform 0.2s, box-shadow 0.2s',
+                transition: 'all 0.2s ease-in-out',
+                border: '1px solid',
+                borderColor: 'divider',
                 '&:hover': {
-                  transform: 'translateY(-4px)',
-                  boxShadow: 4,
+                  transform: 'translateY(-6px)',
+                  boxShadow: 6,
+                  borderColor: action.color,
                 },
               }}
               onClick={() => navigate(action.path)}
@@ -94,10 +156,24 @@ export default function Dashboard() {
                   alignItems: 'center',
                   textAlign: 'center',
                   p: 3,
+                  height: '100%',
                 }}
               >
-                <Box sx={{ color: action.color, mb: 2 }}>{action.icon}</Box>
-                <Typography variant="h6" gutterBottom>
+                <Box 
+                  sx={{ 
+                    color: 'white', 
+                    bgcolor: action.color, 
+                    borderRadius: '50%',
+                    p: 2,
+                    mb: 2,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}
+                >
+                  {action.icon}
+                </Box>
+                <Typography variant="h6" fontWeight="medium" gutterBottom>
                   {action.title}
                 </Typography>
                 <Typography variant="body2" color="text.secondary">

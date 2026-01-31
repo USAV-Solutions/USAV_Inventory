@@ -26,6 +26,7 @@ import {
   Logout,
   Person,
   Storefront,
+  People,
 } from '@mui/icons-material'
 import { useAuth } from '../../hooks/useAuth'
 
@@ -44,6 +45,7 @@ const navItems: NavItem[] = [
   { title: 'Stock Lookup', path: '/warehouse/lookup', icon: <Search />, roles: ['ADMIN', 'WAREHOUSE_OP'] },
   { title: 'Inventory Management', path: '/catalog/inventory', icon: <Inventory />, roles: ['ADMIN', 'SALES_REP'] },
   { title: 'Product Listings', path: '/catalog/listings', icon: <Storefront />, roles: ['ADMIN', 'SALES_REP'] },
+  { title: 'User Management', path: '/admin/users', icon: <People />, roles: ['ADMIN'] },
 ]
 
 export default function Layout() {

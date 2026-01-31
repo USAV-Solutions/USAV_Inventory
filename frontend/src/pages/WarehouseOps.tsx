@@ -11,6 +11,7 @@ import {
   Snackbar,
   Paper,
   Chip,
+  Button,
 } from '@mui/material'
 import {
   LocalShipping,
@@ -18,8 +19,11 @@ import {
   FactCheck,
   CheckCircle,
   Error as ErrorIcon,
+  Add,
 } from '@mui/icons-material'
 import axiosClient from '../api/axiosClient'
+import CreateStockDialog from '../components/inventory/CreateStockDialog'
+import { useAuth } from '../hooks/useAuth'
 
 type Mode = 'receive' | 'move' | 'audit'
 
@@ -35,6 +39,7 @@ export default function WarehouseOps() {
   const [input, setInput] = useState('')
   const [itemInfo, setItemInfo] = useState<ItemInfo | null>(null)
   const [waitingForLocation, setWaitingForLocation] = useState(false)
+  const [createStockDialogOpen, setCreateStockDialogOpen] = useState(false)
   const [notification, setNotification] = useState<{
     open: boolean
     message: string
@@ -42,6 +47,7 @@ export default function WarehouseOps() {
   }>({ open: false, message: '', severity: 'success' })
   
   const inputRef = useRef<HTMLInputElement>(null)
+  const { hasRole } = useAuth()
 
   // Auto-focus the input field
   useEffect(() => {
@@ -155,9 +161,18 @@ export default function WarehouseOps() {
 
   return (
     <Box>
-      <Typography variant="h4" gutterBottom>
-        Warehouse Operations
-      </Typography>
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
+        <Typography variant="h4">Warehouse Operations</Typography>
+        {hasRole(['ADMIN', 'WAREHOUSE_OP']) && (
+          <Button
+            variant="contained"
+            startIcon={<Add />}
+            onClick={() => setCreateStockDialogOpen(true)}
+          >
+            Create Stock
+          </Button>
+        )}
+      </Box>
 
       {/* Mode Toggle */}
       <ToggleButtonGroup
@@ -240,6 +255,15 @@ export default function WarehouseOps() {
           {notification.message}
         </Alert>
       </Snackbar>
+
+      {/* Create Stock Dialog */}
+      <CreateStockDialog
+        open={createStockDialogOpen}
+        onClose={() => setCreateStockDialogOpen(false)}
+        onSuccess={(item) => {
+          showNotification(`Stock item created: ${item.serial_number || `ID ${item.id}`}`, 'success')
+        }}
+      />
     </Box>
   )
 }

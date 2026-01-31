@@ -14,7 +14,7 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
 
 // Decode JWT to extract user info
-function decodeToken(token: string): { sub: string; role: UserRole } | null {
+function decodeToken(token: string): { sub: string; role: UserRole; username?: string } | null {
   try {
     const base64Url = token.split('.')[1]
     const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/')
@@ -69,8 +69,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const decoded = decodeToken(access_token)
     if (decoded) {
       const userData: User = {
-        id: 0,
-        username: decoded.sub,
+        id: parseInt(decoded.sub) || 0,
+        username: decoded.username || decoded.sub,
         role: decoded.role,
         is_active: true,
       }
